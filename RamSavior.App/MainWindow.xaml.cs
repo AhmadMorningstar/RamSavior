@@ -5,6 +5,7 @@ using System.Windows.Threading;
 using RamSavior.App.Settings;
 using RamSavior.Core.Engine;
 using RamSavior.Core.Monitoring;
+using RamSavior.Core.ProcessTrim;
 using Wpf.Ui.Controls;
 
 namespace RamSavior.App;
@@ -22,12 +23,103 @@ public partial class MainWindow : FluentWindow
         _settings = settings;
 
         BuildCustomItemsPanel();
+        ApplyCompactMode();
+        ApplyExperimentalVisibility();
 
         _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         _pollTimer.Tick += (_, _) => RefreshStatus();
         _pollTimer.Start();
 
         RefreshStatus();
+    }
+
+    /// <summary>
+    /// Measures the window's natural content size once on first show, then locks that
+    /// as a normal, freely user-resizable Height/Width — gives a perfectly-fitted
+    /// startup size without permanently taking resize control away from the user like
+    /// SizeToContent alone would.
+    /// </summary>
+    private void Window_Loaded(object sender, RoutedEventArgs e)
+    {
+        SizeToContent = SizeToContent.Height;
+
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            SizeToContent = SizeToContent.Manual;
+            Height = Math.Min(ActualHeight, SystemParameters.WorkArea.Height - 40);
+        }), DispatcherPriority.ContextIdle);
+    }
+
+    /// <summary>Re-measures and re-locks the size — used after Compact Mode or Experimental
+    /// visibility changes, since those change how tall the content naturally wants to be.</summary>
+    private void ReflowWindowSize()
+    {
+        SizeToContent = SizeToContent.Height;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            SizeToContent = SizeToContent.Manual;
+            Height = Math.Min(ActualHeight, SystemParameters.WorkArea.Height - 40);
+        }), DispatcherPriority.ContextIdle);
+    }
+
+    private void ApplyCompactMode()
+    {
+        double scale = _settings.CompactMode ? 0.85 : 1.0;
+        RootContent.LayoutTransform = new ScaleTransform(scale, scale);
+    }
+
+    private void ApplyExperimentalVisibility()
+    {
+        ExperimentalSection.Visibility = _settings.EnableExperimentalFeatures
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        if (_settings.EnableExperimentalFeatures && ProcessComboBox.Items.Count == 0)
+            RefreshProcessList();
+    }
+
+    private void RefreshProcessList()
+    {
+        ProcessComboBox.Items.Clear();
+
+        foreach (var proc in ProcessTrimmer.GetTopProcessesByMemory())
+        {
+            ProcessComboBox.Items.Add(new ComboBoxItem
+            {
+                Content = $"{proc.Name} (PID {proc.Pid}) \u2014 {proc.WorkingSetMB:F1} MB",
+                Tag = proc.Pid
+            });
+        }
+
+        if (ProcessComboBox.Items.Count > 0)
+            ProcessComboBox.SelectedIndex = 0;
+    }
+
+    private void RefreshProcessesButton_Click(object sender, RoutedEventArgs e) => RefreshProcessList();
+
+    private void TrimProcessButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (ProcessComboBox.SelectedItem is not ComboBoxItem item || item.Tag is not int pid)
+        {
+            ExperimentalResultText.Text = "Pick a process first.";
+            return;
+        }
+
+        TrimProcessButton.IsEnabled = false;
+        ExperimentalResultText.Text = "Trimming...";
+
+        Task.Run(() => ProcessTrimmer.TrimProcess(pid)).ContinueWith(t =>
+        {
+            var (success, error) = t.Result;
+
+            Dispatcher.Invoke(() =>
+            {
+                TrimProcessButton.IsEnabled = true;
+                ExperimentalResultText.Text = success
+                    ? "Trimmed successfully."
+                    : $"Failed: {error}";
+            });
+        });
     }
 
     private void BuildCustomItemsPanel()
@@ -89,7 +181,6 @@ public partial class MainWindow : FluentWindow
         ApplyAdvancedGating();
     }
 
-    /// <summary>Enables/disables + dims the Advanced-tier checkboxes based on the current setting.</summary>
     private void ApplyAdvancedGating()
     {
         foreach (var info in MemoryCommandCatalog.All)
@@ -112,11 +203,7 @@ public partial class MainWindow : FluentWindow
 
     private void ModeRadio_Checked(object sender, RoutedEventArgs e)
     {
-        // Guard against firing before InitializeComponent has fully wired every named
-        // element — SmartModeRadio's IsChecked="True" in XAML fires this Checked event
-        // mid-load, before CustomPanel itself has been connected yet.
         if (CustomPanel is null) return;
-
         CustomPanel.Visibility = CustomModeRadio.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -124,6 +211,16 @@ public partial class MainWindow : FluentWindow
     {
         var settingsWindow = new SettingsWindow(_settings) { Owner = this };
         settingsWindow.AdvancedCleaningChanged = ApplyAdvancedGating;
+        settingsWindow.CompactModeChanged = () =>
+        {
+            ApplyCompactMode();
+            ReflowWindowSize();
+        };
+        settingsWindow.ExperimentalFeaturesChanged = () =>
+        {
+            ApplyExperimentalVisibility();
+            ReflowWindowSize();
+        };
         settingsWindow.ShowDialog();
     }
 

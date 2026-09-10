@@ -34,7 +34,7 @@ public static class CleanupEngine
     public static CleanupResult Run(CleanMode mode)
     {
         var commands = mode == CleanMode.Full
-            ? new[] { MemoryListCommand.EmptyWorkingSets, MemoryListCommand.EmptySystemWorkingSet, MemoryListCommand.EmptyModifiedPageList, MemoryListCommand.EmptyStandbyList }
+            ? new[] { MemoryListCommand.EmptyWorkingSets, MemoryListCommand.EmptyModifiedPageList, MemoryListCommand.EmptyStandbyList }
             : new[] { MemoryListCommand.EmptyPriority0StandbyList };
 
         return RunCommands(commands, mode);

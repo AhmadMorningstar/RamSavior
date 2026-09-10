@@ -3,11 +3,12 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="RAM Savior"
-        Height="620" Width="440"
-        MinHeight="480" MinWidth="420"
+        Width="440"
+        MinHeight="360" MinWidth="380"
         WindowBackdropType="Mica"
         ExtendsContentIntoTitleBar="True"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        Loaded="Window_Loaded">
 
     <Grid Margin="0">
         <Grid.RowDefinitions>
@@ -18,7 +19,7 @@
         <ui:TitleBar Title="RAM Savior" Grid.Row="0" />
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="24,12,24,24" VerticalAlignment="Top">
+        <StackPanel x:Name="RootContent" Margin="24,12,24,24" VerticalAlignment="Top">
 
             <Grid Margin="0,0,0,8">
                 <Grid.ColumnDefinitions>
@@ -70,6 +71,47 @@
                        Click="CleanButton_Click"/>
 
             <TextBlock x:Name="ResultText" Margin="0,12,0,0" TextWrapping="Wrap" Opacity="0.8"/>
+
+            <StackPanel x:Name="ExperimentalSection" Visibility="Collapsed" Margin="0,20,0,0">
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Experimental" FontSize="14" FontWeight="SemiBold" Opacity="0.7" VerticalAlignment="Center"/>
+                    <Border Grid.Column="1" Background="#E5484D" CornerRadius="4" Padding="6,1,6,1">
+                        <TextBlock Text="EXPERIMENTAL" FontSize="9" FontWeight="Bold" Foreground="White"/>
+                    </Border>
+                </Grid>
+
+                <ui:CardExpander IsExpanded="True">
+                    <StackPanel Margin="4">
+                        <TextBlock Text="Trim a specific process" FontWeight="SemiBold" Margin="0,0,0,2"/>
+                        <TextBlock Text="Uses the official Windows EmptyWorkingSet API on one chosen app instead of purging system-wide." Opacity="0.6" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <ComboBox Grid.Column="0" x:Name="ProcessComboBox" Margin="0,0,8,0"/>
+                            <ui:Button Grid.Column="1" x:Name="RefreshProcessesButton"
+                                       Icon="{ui:SymbolIcon Symbol=ArrowSync24}"
+                                       Appearance="Secondary" Width="36" Height="36" Padding="0"
+                                       Click="RefreshProcessesButton_Click"/>
+                        </Grid>
+
+                        <ui:Button x:Name="TrimProcessButton"
+                                   Content="Trim Selected Process"
+                                   Appearance="Secondary"
+                                   Height="36"
+                                   Margin="0,10,0,0"
+                                   Click="TrimProcessButton_Click"/>
+
+                        <TextBlock x:Name="ExperimentalResultText" Margin="0,8,0,0" FontSize="11" TextWrapping="Wrap" Opacity="0.8"/>
+                    </StackPanel>
+                </ui:CardExpander>
+            </StackPanel>
 
         </StackPanel>
         </ScrollViewer>
