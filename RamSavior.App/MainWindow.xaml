@@ -3,7 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="RAM Savior"
-        Height="480" Width="420"
+        Height="620" Width="440"
+        MinHeight="480" MinWidth="420"
         WindowBackdropType="Mica"
         ExtendsContentIntoTitleBar="True"
         WindowStartupLocation="CenterScreen">
@@ -16,7 +17,8 @@
 
         <ui:TitleBar Title="RAM Savior" Grid.Row="0" />
 
-        <StackPanel Grid.Row="1" Margin="24,12,24,24" VerticalAlignment="Top">
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24,12,24,24" VerticalAlignment="Top">
 
             <Grid Margin="0,0,0,8">
                 <Grid.ColumnDefinitions>
@@ -45,12 +47,18 @@
 
             <ui:CardControl Margin="0,0,0,8" Icon="{ui:SymbolIcon Symbol=Options24}">
                 <StackPanel>
-                    <RadioButton x:Name="SmartModeRadio" Content="Smart Clean (recommended)" IsChecked="True" GroupName="Mode"/>
+                    <RadioButton x:Name="SmartModeRadio" Content="Smart Clean (recommended)" IsChecked="True" GroupName="Mode" Checked="ModeRadio_Checked"/>
                     <TextBlock Text="Targets low-reuse cache only. Minimal disk-reload risk." Opacity="0.6" FontSize="11" Margin="20,2,0,6"/>
-                    <RadioButton x:Name="FullModeRadio" Content="Full Purge" GroupName="Mode"/>
-                    <TextBlock Text="Flushes all standby cache, including hot pages. May cause brief disk activity as apps reload data." Opacity="0.6" FontSize="11" Margin="20,2,0,0" TextWrapping="Wrap"/>
+                    <RadioButton x:Name="FullModeRadio" Content="Full Purge" GroupName="Mode" Checked="ModeRadio_Checked"/>
+                    <TextBlock Text="Flushes all standby cache, including hot pages. May cause brief disk activity as apps reload data." Opacity="0.6" FontSize="11" Margin="20,2,0,6" TextWrapping="Wrap"/>
+                    <RadioButton x:Name="CustomModeRadio" Content="Custom" GroupName="Mode" Checked="ModeRadio_Checked"/>
+                    <TextBlock Text="Pick exactly which cleanup actions to run." Opacity="0.6" FontSize="11" Margin="20,2,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
             </ui:CardControl>
+
+            <ui:CardExpander x:Name="CustomPanel" IsExpanded="True" Visibility="Collapsed" Margin="0,0,0,8">
+                <StackPanel x:Name="CustomItemsPanel" Margin="4"/>
+            </ui:CardExpander>
 
             <ui:Button x:Name="CleanButton"
                        Content="Purge Memory Now"
@@ -64,5 +72,6 @@
             <TextBlock x:Name="ResultText" Margin="0,12,0,0" TextWrapping="Wrap" Opacity="0.8"/>
 
         </StackPanel>
+        </ScrollViewer>
     </Grid>
 </ui:FluentWindow>

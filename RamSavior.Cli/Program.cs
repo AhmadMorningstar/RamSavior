@@ -40,6 +40,14 @@ var logOption = new Option<string?>("--log")
     Description = "Path to an NDJSON log file to append this run's result to."
 };
 
+var itemsOption = new Option<string?>("--items")
+{
+    Description = "Comma-separated list of specific purge commands to run instead of --mode " +
+                   "(e.g. EmptyWorkingSets,EmptyPriority0StandbyList). Overrides --mode when set. " +
+                   "Valid values: EmptyWorkingSets, EmptySystemWorkingSet, EmptyModifiedPageList, " +
+                   "EmptyStandbyList, EmptyPriority0StandbyList."
+};
+
 var rootCommand = new RootCommand("RAM Savior — modern Windows memory management. CLI: ramsvr");
 
 // ---- clean ----
@@ -49,6 +57,7 @@ cleanCommand.Options.Add(jsonOption);
 cleanCommand.Options.Add(quietOption);
 cleanCommand.Options.Add(forceOption);
 cleanCommand.Options.Add(logOption);
+cleanCommand.Options.Add(itemsOption);
 
 cleanCommand.SetAction(parseResult =>
 {
@@ -57,6 +66,7 @@ cleanCommand.SetAction(parseResult =>
     bool quiet = parseResult.GetValue(quietOption);
     bool force = parseResult.GetValue(forceOption);
     string? logPath = parseResult.GetValue(logOption);
+    string? itemsRaw = parseResult.GetValue(itemsOption);
 
     if (!force && MemoryStatus.IsUserBusyOrFullscreen())
     {
@@ -68,7 +78,28 @@ cleanCommand.SetAction(parseResult =>
         return ExitSkipped;
     }
 
-    var result = CleanupEngine.Run(mode);
+    CleanupResult result;
+
+    if (!string.IsNullOrWhiteSpace(itemsRaw))
+    {
+        var selected = new HashSet<MemoryListCommand>();
+        foreach (var token in itemsRaw.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!Enum.TryParse<MemoryListCommand>(token, ignoreCase: true, out var parsed))
+            {
+                Console.Error.WriteLine($"Unrecognized item '{token}'. Valid values: " +
+                    string.Join(", ", Enum.GetNames<MemoryListCommand>()));
+                return ExitGeneralFailure;
+            }
+            selected.Add(parsed);
+        }
+
+        result = CleanupEngine.RunCustom(selected);
+    }
+    else
+    {
+        result = CleanupEngine.Run(mode);
+    }
 
     if (logPath is not null)
         JsonLogger.Append(logPath, result);
