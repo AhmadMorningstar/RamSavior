@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>RamSavior.Cli</RootNamespace>
+    <AssemblyName>ramsvr</AssemblyName>
+
+    <!-- CLI is the one binary people drop straight into Task Scheduler, so it's built
+         to publish as a single trimmed file with fast startup. See PUBLISH.md for the
+         exact `dotnet publish` command. -->
+    <PublishAot>false</PublishAot> <!-- flip to true once you confirm System.CommandLine's AOT trim compat on your exact package version -->
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <InvariantGlobalization>true</InvariantGlobalization>
+
+    <!-- Requests admin at launch — the purge syscalls need elevated + enabled privileges -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" Version="2.0.0-beta5.25306.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RamSavior.Core\RamSavior.Core.csproj" />
+  </ItemGroup>
+
+</Project>

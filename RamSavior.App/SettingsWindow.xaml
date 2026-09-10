@@ -1,0 +1,45 @@
+<ui:FluentWindow x:Class="RamSavior.App.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="Settings"
+        Height="440" Width="380"
+        WindowBackdropType="Mica"
+        ExtendsContentIntoTitleBar="True"
+        WindowStartupLocation="CenterOwner">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Title="Settings" Grid.Row="0" />
+
+        <StackPanel Grid.Row="1" Margin="24,12,24,24">
+
+            <TextBlock Text="Appearance" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+
+            <ui:CardControl Margin="0,0,0,16">
+                <StackPanel>
+                    <RadioButton x:Name="SystemThemeRadio" Content="Follow system" GroupName="Theme" Checked="ThemeRadio_Checked"/>
+                    <RadioButton x:Name="LightThemeRadio" Content="Light" GroupName="Theme" Margin="0,6,0,0" Checked="ThemeRadio_Checked"/>
+                    <RadioButton x:Name="DarkThemeRadio" Content="Dark" GroupName="Theme" Margin="0,6,0,0" Checked="ThemeRadio_Checked"/>
+                </StackPanel>
+            </ui:CardControl>
+
+            <TextBlock Text="Accent Color" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+
+            <ItemsControl x:Name="AccentSwatches">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
+
+            <TextBlock x:Name="StatusText" Margin="0,16,0,0" Opacity="0.6" FontSize="11"/>
+
+        </StackPanel>
+    </Grid>
+</ui:FluentWindow>
