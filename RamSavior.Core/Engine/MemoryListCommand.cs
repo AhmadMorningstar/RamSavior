@@ -15,5 +15,7 @@ public enum CleanMode
     /// <summary>Only evicts Priority-0 standby pages: least-likely-to-be-reused cache. Minimal disk-reload risk.</summary>
     Smart,
     /// <summary>Full sequential flush: working sets → system working set → modified list → entire standby list.</summary>
-    Full
+    Full,
+    /// <summary>User-picked combination of individual purge commands.</summary>
+    Custom
 }

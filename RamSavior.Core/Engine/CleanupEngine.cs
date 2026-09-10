@@ -33,6 +33,33 @@ public static class CleanupEngine
 {
     public static CleanupResult Run(CleanMode mode)
     {
+        var commands = mode == CleanMode.Full
+            ? new[] { MemoryListCommand.EmptyWorkingSets, MemoryListCommand.EmptySystemWorkingSet, MemoryListCommand.EmptyModifiedPageList, MemoryListCommand.EmptyStandbyList }
+            : new[] { MemoryListCommand.EmptyPriority0StandbyList };
+
+        return RunCommands(commands, mode);
+    }
+
+    /// <summary>
+    /// Runs an arbitrary user-picked set of purge commands (Custom mode). Commands are
+    /// executed in MemoryCommandCatalog.CanonicalOrder regardless of the order they were
+    /// selected in — sequencing correctness isn't something the user should have to think
+    /// about when ticking boxes.
+    /// </summary>
+    public static CleanupResult RunCustom(IReadOnlySet<MemoryListCommand> selected)
+    {
+        if (selected.Count == 0)
+        {
+            return new CleanupResult(false, CleanMode.Custom, 0, 0, 0, TimeSpan.Zero,
+                "No items selected — pick at least one cleanup action.");
+        }
+
+        var ordered = MemoryCommandCatalog.CanonicalOrder.Where(selected.Contains).ToArray();
+        return RunCommands(ordered, CleanMode.Custom);
+    }
+
+    private static CleanupResult RunCommands(IReadOnlyList<MemoryListCommand> commands, CleanMode mode)
+    {
         var sw = Stopwatch.StartNew();
 
         var (privilegesOk, privilegeError) = PrivilegeManager.EnableRequiredPrivileges();
@@ -46,17 +73,8 @@ public static class CleanupEngine
 
         try
         {
-            if (mode == CleanMode.Full)
-            {
-                Execute(MemoryListCommand.EmptyWorkingSets);
-                Execute(MemoryListCommand.EmptySystemWorkingSet);
-                Execute(MemoryListCommand.EmptyModifiedPageList);
-                Execute(MemoryListCommand.EmptyStandbyList);
-            }
-            else
-            {
-                Execute(MemoryListCommand.EmptyPriority0StandbyList);
-            }
+            foreach (var command in commands)
+                Execute(command);
         }
         catch (InvalidOperationException ex)
         {

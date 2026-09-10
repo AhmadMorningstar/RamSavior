@@ -30,7 +30,26 @@ public partial class SettingsWindow : FluentWindow
         _isLoaded = true;
 
         HighlightSelectedSwatch();
+
+        _isLoaded = false;
+        AdvancedToggle.IsChecked = _settings.EnableAdvancedCleaning;
+        _isLoaded = true;
     }
+
+    private void AdvancedToggle_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_isLoaded) return;
+
+        _settings.EnableAdvancedCleaning = AdvancedToggle.IsChecked == true;
+        SettingsStore.Save(_settings);
+        StatusText.Text = _settings.EnableAdvancedCleaning
+            ? "Advanced cleaning enabled."
+            : "Advanced cleaning disabled.";
+        AdvancedCleaningChanged?.Invoke();
+    }
+
+    /// <summary>Lets MainWindow refresh its Custom-mode checkbox list immediately when this toggles.</summary>
+    public Action? AdvancedCleaningChanged { get; set; }
 
     private void BuildSwatches()
     {
