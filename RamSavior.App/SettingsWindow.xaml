@@ -3,7 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="Settings"
-        Height="600" Width="380"
+        Height="640" Width="400"
+        MinHeight="420" MinWidth="360"
         WindowBackdropType="Mica"
         ExtendsContentIntoTitleBar="True"
         WindowStartupLocation="CenterOwner">
@@ -16,7 +17,8 @@
 
         <ui:TitleBar Title="Settings" Grid.Row="0" />
 
-        <StackPanel Grid.Row="1" Margin="24,12,24,24">
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24,12,24,24">
 
             <TextBlock Text="Appearance" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
 
@@ -30,7 +32,7 @@
 
             <TextBlock Text="Accent Color" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
 
-            <ItemsControl x:Name="AccentSwatches">
+            <ItemsControl x:Name="AccentSwatches" Margin="0,0,0,16">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <WrapPanel Orientation="Horizontal"/>
@@ -38,21 +40,39 @@
                 </ItemsControl.ItemsPanel>
             </ItemsControl>
 
-            <TextBlock Text="Advanced" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,20,0,8"/>
+            <TextBlock Text="Layout" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
 
-            <ui:CardControl Margin="0,0,0,8">
-                <ui:CardControl.Icon>
-                    <ui:SymbolIcon Symbol="Warning24"/>
-                </ui:CardControl.Icon>
+            <ui:CardControl Margin="0,0,0,16">
                 <StackPanel>
-                    <ui:ToggleSwitch x:Name="AdvancedToggle" Content="Enable Advanced Cleaning" Checked="AdvancedToggle_Changed" Unchecked="AdvancedToggle_Changed"/>
+                    <CheckBox x:Name="CompactModeCheckBox" Content="Compact Mode" Checked="CompactModeCheckBox_Changed" Unchecked="CompactModeCheckBox_Changed"/>
                     <TextBlock Margin="0,4,0,0" FontSize="11" Opacity="0.6" TextWrapping="Wrap"
-                               Text="Unlocks lower-level cleanup options in Custom mode — full standby purge, modified-page flush, and system working set. These can briefly affect responsiveness or cause disk activity. Leave off unless you understand the tradeoffs."/>
+                               Text="Shrinks spacing and text throughout the app. Good fit for smaller or lower-resolution screens."/>
                 </StackPanel>
             </ui:CardControl>
 
-            <TextBlock x:Name="StatusText" Margin="0,16,0,0" Opacity="0.6" FontSize="11"/>
+            <TextBlock Text="Advanced" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+
+            <ui:CardControl Margin="0,0,0,16">
+                <StackPanel>
+                    <CheckBox x:Name="AdvancedCheckBox" Content="Enable Advanced Cleaning" Checked="AdvancedCheckBox_Changed" Unchecked="AdvancedCheckBox_Changed"/>
+                    <TextBlock Margin="0,4,0,0" FontSize="11" Opacity="0.6" TextWrapping="Wrap"
+                               Text="Unlocks lower-level cleanup options in Custom mode — full standby purge and forced disk write-back. These can briefly cause disk activity or a short stutter. Leave off unless you understand the tradeoffs."/>
+                </StackPanel>
+            </ui:CardControl>
+
+            <TextBlock Text="Experimental" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+
+            <Border Background="#33E5484D" CornerRadius="6" Padding="12" Margin="0,0,0,16">
+                <StackPanel>
+                    <CheckBox x:Name="ExperimentalCheckBox" Content="Enable Experimental Features" Checked="ExperimentalCheckBox_Changed" Unchecked="ExperimentalCheckBox_Changed"/>
+                    <TextBlock Margin="0,4,0,0" FontSize="11" Opacity="0.8" TextWrapping="Wrap"
+                               Text="Adds per-process memory trimming, using a different (documented, official) Windows API than the rest of this app. It targets one running app you pick rather than the whole system. Less tested here than the core cleaning modes — enable only if you're comfortable experimenting."/>
+                </StackPanel>
+            </Border>
+
+            <TextBlock x:Name="StatusText" Margin="0,4,0,0" Opacity="0.6" FontSize="11"/>
 
         </StackPanel>
+        </ScrollViewer>
     </Grid>
 </ui:FluentWindow>

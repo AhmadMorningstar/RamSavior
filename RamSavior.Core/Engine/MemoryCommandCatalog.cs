@@ -25,11 +25,6 @@ public static class MemoryCommandCatalog
             "Clears cache pages least likely to be reused. Minimal disk-reload risk. This is what Smart Clean uses.",
             IsAdvanced: false),
 
-        new(MemoryListCommand.EmptySystemWorkingSet,
-            "Empty System Working Set",
-            "Flushes kernel and driver working sets. Can briefly affect system responsiveness right after running.",
-            IsAdvanced: true),
-
         new(MemoryListCommand.EmptyModifiedPageList,
             "Empty Modified Page List",
             "Forces all dirty (modified) pages to be written to disk immediately. Causes a short burst of disk I/O.",
@@ -50,7 +45,6 @@ public static class MemoryCommandCatalog
     public static readonly MemoryListCommand[] CanonicalOrder =
     [
         MemoryListCommand.EmptyWorkingSets,
-        MemoryListCommand.EmptySystemWorkingSet,
         MemoryListCommand.EmptyModifiedPageList,
         MemoryListCommand.EmptyPriority0StandbyList,
         MemoryListCommand.EmptyStandbyList

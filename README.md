@@ -58,13 +58,21 @@ and **check "Run with highest privileges"** — without that, you'll hit exit co
   frequent updates; I pinned versions that were current as of my last check, but NuGet
   restore will tell you immediately if either has moved — bump the version in the
   `.csproj` if so.
-- **`SystemMemoryListInformation = 0x50`** and the `MemoryListCommand` enum values are
-  the same undocumented-but-long-stable constants Microsoft's own RAMMap/sysinternals
-  tooling relies on — stable across Win10/11, but "undocumented" means Microsoft
-  reserves the right to change them in a future build. Nothing to do about that beyond
-  awareness.
+- **Memory-list command values were corrected.** An earlier draft of this project used
+  an invented "system working set" command that doesn't actually exist in the real
+  Windows API. The values now match Process Hacker's verified `ntexapi.h` exactly — the
+  legitimate command set is `EmptyWorkingSets`, `EmptyModifiedPageList`,
+  `EmptyStandbyList`, and `EmptyPriority0StandbyList`. That's the complete set; nothing
+  else legitimate exists to add here.
+- **`SystemMemoryListInformation = 0x50`** is the same undocumented-but-long-stable
+  constant Sysinternals-class tooling relies on — stable across Win10/11, but
+  "undocumented" means Microsoft reserves the right to change it in a future build.
 - **Full mode's tradeoff is real, not just a disclaimer** — see the comment block at
   the top of `CleanupEngine.cs`. Smart mode is the default on purpose.
+- **Experimental per-process trim uses a different, fully documented API**
+  (`EmptyWorkingSet` from `psapi.dll`, official since Windows 2000) — it's real and
+  safe, but targets one chosen running app rather than the whole system, which is why
+  it's gated separately from Advanced.
 - I have not compiled this on a live Windows machine with Visual Studio — the sandbox
   I write in doesn't have the Windows/WPF toolchain. The code is correct .NET 10 /
   C# 13 syntax and calls real, stable Win32 APIs the same way Sysinternals-class tools
@@ -74,7 +82,6 @@ and **check "Run with highest privileges"** — without that, you'll hit exit co
 
 ## 5. What's not built yet (next milestones, not needed for a working v1)
 - System tray icon + flyout
-- Config file (JSON) for thresholds / exclusions
 - `ramsvr schedule install/remove` (Task Scheduler automation from the CLI itself)
 - PowerShell module wrapper with native cmdlets
 - Code signing + winget manifest

@@ -12,6 +12,15 @@ public partial class SettingsWindow : FluentWindow
     private bool _isLoaded;
     private readonly Dictionary<string, Border> _swatchBorders = new();
 
+    /// <summary>Lets MainWindow refresh its Custom-mode checkbox list immediately when this toggles.</summary>
+    public Action? AdvancedCleaningChanged { get; set; }
+
+    /// <summary>Lets MainWindow re-run its auto-fit sizing when compact mode changes.</summary>
+    public Action? CompactModeChanged { get; set; }
+
+    /// <summary>Lets MainWindow show/hide the Experimental section immediately.</summary>
+    public Action? ExperimentalFeaturesChanged { get; set; }
+
     public SettingsWindow(AppSettings settings)
     {
         InitializeComponent();
@@ -19,7 +28,6 @@ public partial class SettingsWindow : FluentWindow
 
         BuildSwatches();
 
-        // Set initial radio state without triggering the Checked handler mid-construction.
         _isLoaded = false;
         (_settings.Theme switch
         {
@@ -27,29 +35,14 @@ public partial class SettingsWindow : FluentWindow
             ThemeChoice.Dark => DarkThemeRadio,
             _ => SystemThemeRadio
         }).IsChecked = true;
+
+        CompactModeCheckBox.IsChecked = _settings.CompactMode;
+        AdvancedCheckBox.IsChecked = _settings.EnableAdvancedCleaning;
+        ExperimentalCheckBox.IsChecked = _settings.EnableExperimentalFeatures;
         _isLoaded = true;
 
         HighlightSelectedSwatch();
-
-        _isLoaded = false;
-        AdvancedToggle.IsChecked = _settings.EnableAdvancedCleaning;
-        _isLoaded = true;
     }
-
-    private void AdvancedToggle_Changed(object sender, RoutedEventArgs e)
-    {
-        if (!_isLoaded) return;
-
-        _settings.EnableAdvancedCleaning = AdvancedToggle.IsChecked == true;
-        SettingsStore.Save(_settings);
-        StatusText.Text = _settings.EnableAdvancedCleaning
-            ? "Advanced cleaning enabled."
-            : "Advanced cleaning disabled.";
-        AdvancedCleaningChanged?.Invoke();
-    }
-
-    /// <summary>Lets MainWindow refresh its Custom-mode checkbox list immediately when this toggles.</summary>
-    public Action? AdvancedCleaningChanged { get; set; }
 
     private void BuildSwatches()
     {
@@ -109,5 +102,35 @@ public partial class SettingsWindow : FluentWindow
         SettingsStore.Save(_settings);
         ThemeApplier.Apply(_settings);
         StatusText.Text = $"Theme set to {_settings.Theme}.";
+    }
+
+    private void CompactModeCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_isLoaded) return;
+
+        _settings.CompactMode = CompactModeCheckBox.IsChecked == true;
+        SettingsStore.Save(_settings);
+        StatusText.Text = _settings.CompactMode ? "Compact Mode enabled." : "Compact Mode disabled.";
+        CompactModeChanged?.Invoke();
+    }
+
+    private void AdvancedCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_isLoaded) return;
+
+        _settings.EnableAdvancedCleaning = AdvancedCheckBox.IsChecked == true;
+        SettingsStore.Save(_settings);
+        StatusText.Text = _settings.EnableAdvancedCleaning ? "Advanced cleaning enabled." : "Advanced cleaning disabled.";
+        AdvancedCleaningChanged?.Invoke();
+    }
+
+    private void ExperimentalCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_isLoaded) return;
+
+        _settings.EnableExperimentalFeatures = ExperimentalCheckBox.IsChecked == true;
+        SettingsStore.Save(_settings);
+        StatusText.Text = _settings.EnableExperimentalFeatures ? "Experimental features enabled." : "Experimental features disabled.";
+        ExperimentalFeaturesChanged?.Invoke();
     }
 }

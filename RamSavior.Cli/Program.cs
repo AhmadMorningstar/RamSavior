@@ -44,7 +44,7 @@ var itemsOption = new Option<string?>("--items")
 {
     Description = "Comma-separated list of specific purge commands to run instead of --mode " +
                    "(e.g. EmptyWorkingSets,EmptyPriority0StandbyList). Overrides --mode when set. " +
-                   "Valid values: EmptyWorkingSets, EmptySystemWorkingSet, EmptyModifiedPageList, " +
+                   "Valid values: EmptyWorkingSets, EmptyModifiedPageList, " +
                    "EmptyStandbyList, EmptyPriority0StandbyList."
 };
 
