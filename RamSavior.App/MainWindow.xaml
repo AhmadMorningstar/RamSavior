@@ -1,0 +1,68 @@
+<ui:FluentWindow x:Class="RamSavior.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="RAM Savior"
+        Height="480" Width="420"
+        WindowBackdropType="Mica"
+        ExtendsContentIntoTitleBar="True"
+        WindowStartupLocation="CenterScreen">
+
+    <Grid Margin="0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Title="RAM Savior" Grid.Row="0" />
+
+        <StackPanel Grid.Row="1" Margin="24,12,24,24" VerticalAlignment="Top">
+
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Memory Status" FontSize="14" FontWeight="SemiBold" Opacity="0.7" VerticalAlignment="Center"/>
+                <ui:Button Grid.Column="1" x:Name="SettingsButton"
+                           Icon="{ui:SymbolIcon Symbol=Settings24}"
+                           Appearance="Secondary"
+                           Width="32" Height="32" Padding="0"
+                           Click="SettingsButton_Click"/>
+            </Grid>
+
+            <ui:CardExpander IsExpanded="True" Margin="0,0,0,16">
+                <StackPanel Margin="4">
+                    <TextBlock x:Name="AvailableText" Text="-- GB available" FontSize="28" FontWeight="Bold"/>
+                    <TextBlock x:Name="TotalText" Text="of -- GB total" Opacity="0.6" Margin="0,0,0,12"/>
+                    <ui:ProgressRing x:Name="LoadRing" Progress="0" IsIndeterminate="False" Width="0" Height="0"/>
+                    <ProgressBar x:Name="LoadBar" Minimum="0" Maximum="100" Value="0" Height="8"/>
+                    <TextBlock x:Name="LoadPercentText" Text="0% memory load" Margin="0,4,0,0" Opacity="0.6"/>
+                </StackPanel>
+            </ui:CardExpander>
+
+            <TextBlock Text="Clean Mode" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+
+            <ui:CardControl Margin="0,0,0,8" Icon="{ui:SymbolIcon Symbol=Options24}">
+                <StackPanel>
+                    <RadioButton x:Name="SmartModeRadio" Content="Smart Clean (recommended)" IsChecked="True" GroupName="Mode"/>
+                    <TextBlock Text="Targets low-reuse cache only. Minimal disk-reload risk." Opacity="0.6" FontSize="11" Margin="20,2,0,6"/>
+                    <RadioButton x:Name="FullModeRadio" Content="Full Purge" GroupName="Mode"/>
+                    <TextBlock Text="Flushes all standby cache, including hot pages. May cause brief disk activity as apps reload data." Opacity="0.6" FontSize="11" Margin="20,2,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
+            </ui:CardControl>
+
+            <ui:Button x:Name="CleanButton"
+                       Content="Purge Memory Now"
+                       Appearance="Primary"
+                       Icon="{ui:SymbolIcon Symbol=Broom24}"
+                       Height="44"
+                       FontWeight="SemiBold"
+                       Margin="0,16,0,0"
+                       Click="CleanButton_Click"/>
+
+            <TextBlock x:Name="ResultText" Margin="0,12,0,0" TextWrapping="Wrap" Opacity="0.8"/>
+
+        </StackPanel>
+    </Grid>
+</ui:FluentWindow>
