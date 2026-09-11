@@ -46,4 +46,19 @@ public static class MemoryStatus
             or QUERY_USER_NOTIFICATION_STATE.QUNS_RUNNING_D3D_FULL_SCREEN
             or QUERY_USER_NOTIFICATION_STATE.QUNS_PRESENTATION_MODE;
     }
+
+    /// <summary>
+    /// How long since the last keyboard/mouse input, system-wide — the same signal
+    /// screen savers use. Powers automation's optional "only clean when idle" gate,
+    /// same idea ISLC and Wise Memory Optimizer both rely on to avoid interrupting
+    /// active use.
+    /// </summary>
+    public static TimeSpan GetIdleTime()
+    {
+        var info = new LASTINPUTINFO { cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf<LASTINPUTINFO>() };
+        if (!NativeMethods.GetLastInputInfo(ref info)) return TimeSpan.Zero;
+
+        uint idleTicks = unchecked((uint)Environment.TickCount - info.dwTime);
+        return TimeSpan.FromMilliseconds(idleTicks);
+    }
 }

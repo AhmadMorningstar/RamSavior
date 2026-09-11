@@ -35,4 +35,17 @@ public class AppSettings
     /// system, and are newer/less battle-tested in this app specifically.
     /// </summary>
     public bool EnableExperimentalFeatures { get; set; } = false;
+
+    /// <summary>
+    /// Automation only ever runs Normal or Moderate tier cleans (never Custom/Advanced/
+    /// Experimental) — a deliberate safety choice: actions with real tradeoffs shouldn't
+    /// fire unattended without the user present to notice if something feels off.
+    /// </summary>
+    public RamSavior.Core.Automation.AutomationTrigger Automation { get; set; } = new();
+
+    /// <summary>Which tier automation uses when it fires. Restricted to Normal/Moderate at the UI level.</summary>
+    public RamSavior.Core.Engine.CleanMode AutomationTier { get; set; } = RamSavior.Core.Engine.CleanMode.Normal;
+
+    /// <summary>Tracks whether we've already told the user "closing minimizes to tray" once.</summary>
+    public bool HasShownTrayHint { get; set; } = false;
 }

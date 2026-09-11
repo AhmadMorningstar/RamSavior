@@ -54,6 +54,11 @@ internal static class NativeMethods
     [DllImport("shell32.dll")]
     internal static extern int SHQueryUserNotificationState(out QUERY_USER_NOTIFICATION_STATE state);
 
+    // ---- user32.dll : idle-time detection for automation's idle-requirement gate ----
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
+
     internal const uint TOKEN_ADJUST_PRIVILEGES = 0x0020;
     internal const uint TOKEN_QUERY = 0x0008;
     internal const uint SE_PRIVILEGE_ENABLED = 0x00000002;

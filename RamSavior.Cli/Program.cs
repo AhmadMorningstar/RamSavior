@@ -21,8 +21,9 @@ var jsonOption = new Option<bool>("--json", "-j")
 
 var modeOption = new Option<CleanMode>("--mode", "-m")
 {
-    Description = "Cleanup intensity. 'smart' targets low-reuse cache only (default, recommended). 'full' flushes everything, including hot standby cache.",
-    DefaultValueFactory = _ => CleanMode.Smart
+    Description = "Cleanup tier. 'normal' targets low-reuse standby cache only (default, recommended, safe for automation). " +
+                   "'moderate' also flushes working sets for a bit more freed memory. Use --items for full manual control.",
+    DefaultValueFactory = _ => CleanMode.Normal
 };
 
 var quietOption = new Option<bool>("--quiet", "-q")
@@ -48,7 +49,13 @@ var itemsOption = new Option<string?>("--items")
                    "EmptyStandbyList, EmptyPriority0StandbyList."
 };
 
-var rootCommand = new RootCommand("RAM Savior — modern Windows memory management. CLI: ramsvr");
+var rootCommand = new RootCommand(
+    "RAM Savior (ramsvr) — Windows memory cleaner.\n" +
+    "Quick start:\n" +
+    "  ramsvr clean              Run a Smart (Normal-tier) clean, safe defaults.\n" +
+    "  ramsvr status --watch     Watch live memory stats.\n" +
+    "  ramsvr clean --help       See every cleaning option, explained.\n" +
+    "Every command below has its own --help with plain-language descriptions.");
 
 // ---- clean ----
 var cleanCommand = new Command("clean", "Run a memory cleanup pass.");

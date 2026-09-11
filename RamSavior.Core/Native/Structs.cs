@@ -44,3 +44,10 @@ internal struct TOKEN_PRIVILEGES
     public uint PrivilegeCount;
     public LUID_AND_ATTRIBUTES Privileges; // single-privilege layout; we adjust one at a time
 }
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct LASTINPUTINFO
+{
+    public uint cbSize;
+    public uint dwTime;
+}

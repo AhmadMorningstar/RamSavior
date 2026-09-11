@@ -52,36 +52,47 @@ Create a task pointing at `ramsvr.exe` with arguments `clean --quiet --log
 C:\ProgramData\RamSavior\log.ndjson`, trigger however you like (on idle, on a timer),
 and **check "Run with highest privileges"** — without that, you'll hit exit code 2.
 
-## 4. Known things to double check before you rely on this
+## 6. What's new in this build: Automation, 4-tier modes, tray icon
+
+- **Tiers**: Clean Mode is now Normal / Moderate / Advanced / Experimental. Advanced
+  and Experimental both reveal the same checkbox picker (`CustomPanel`) — the
+  difference is Experimental also shows per-process trimming. Both require an opt-in
+  toggle in Settings before their radio button is even selectable.
+- **Automation**: Settings → Automation lets you combine an interval ("every N
+  minutes"), a free-memory threshold, a memory-load-% threshold, and an idle-time
+  requirement — any enabled condition can fire a clean, idle/fullscreen/excluded-process
+  checks can suppress one. Automation is hard-clamped to Normal or Moderate only; it
+  will never run Advanced/Experimental unattended.
+- **Tray icon**: closing the window now minimizes to tray instead of exiting (needed
+  for automation to mean anything). Right-click → Open / Clean Now / Exit. True exit
+  only happens from that menu.
+- **CLI**: `--mode` now accepts `Normal` or `Moderate` (was `smart`/`full`); `--items`
+  is unchanged.
+
+## 7. Known things to double check before you rely on this
 
 - **Package versions are placeholders.** `System.CommandLine` and `WPF-UI` both ship
-  frequent updates; I pinned versions that were current as of my last check, but NuGet
-  restore will tell you immediately if either has moved — bump the version in the
-  `.csproj` if so.
-- **Memory-list command values were corrected.** An earlier draft of this project used
-  an invented "system working set" command that doesn't actually exist in the real
-  Windows API. The values now match Process Hacker's verified `ntexapi.h` exactly — the
-  legitimate command set is `EmptyWorkingSets`, `EmptyModifiedPageList`,
-  `EmptyStandbyList`, and `EmptyPriority0StandbyList`. That's the complete set; nothing
-  else legitimate exists to add here.
-- **`SystemMemoryListInformation = 0x50`** is the same undocumented-but-long-stable
-  constant Sysinternals-class tooling relies on — stable across Win10/11, but
-  "undocumented" means Microsoft reserves the right to change it in a future build.
-- **Full mode's tradeoff is real, not just a disclaimer** — see the comment block at
-  the top of `CleanupEngine.cs`. Smart mode is the default on purpose.
-- **Experimental per-process trim uses a different, fully documented API**
-  (`EmptyWorkingSet` from `psapi.dll`, official since Windows 2000) — it's real and
-  safe, but targets one chosen running app rather than the whole system, which is why
-  it's gated separately from Advanced.
-- I have not compiled this on a live Windows machine with Visual Studio — the sandbox
-  I write in doesn't have the Windows/WPF toolchain. The code is correct .NET 10 /
-  C# 13 syntax and calls real, stable Win32 APIs the same way Sysinternals-class tools
-  do, but if you hit a compile error on first build, paste it back to me and I'll fix
-  it — treat this as a strong first draft you build on, not something guaranteed to
-  compile byte-for-byte on the first try.
+  frequent updates; bump the version in the `.csproj` if NuGet restore complains.
+- **`<UseWindowsForms>true</UseWindowsForms>`** was added to `RamSavior.App.csproj` for
+  the tray icon (`System.Windows.Forms.NotifyIcon` — WPF has no native tray icon
+  control). This pulls in WinForms/System.Drawing assemblies; it's a normal, common
+  pattern for WPF apps that need a tray icon, not a mistake.
+- **Memory-list command values were corrected** in an earlier round — see git history /
+  prior notes. The legitimate set is `EmptyWorkingSets`, `EmptyModifiedPageList`,
+  `EmptyStandbyList`, `EmptyPriority0StandbyList`, verified against Process Hacker's
+  `ntexapi.h`.
+- **True standby-list-size querying isn't implemented.** ISLC's dual-threshold trigger
+  actually reads the real standby list byte count via `NtQuerySystemInformation` +
+  `SYSTEM_MEMORY_LIST_INFORMATION` — we approximate the same spirit with free-GB and
+  load-% thresholds instead, since that struct's exact layout has enough version
+  variance that guessing it wrong risked corrupted reads. This is a good next step if
+  you want ISLC-exact threshold behavior — flagged, not silently skipped.
+- I have not compiled this on a live Windows machine — same caveat as always. If
+  something doesn't compile, paste the error back and I'll fix it in the same turn.
 
-## 5. What's not built yet (next milestones, not needed for a working v1)
-- System tray icon + flyout
+## 8. What's not built yet
+- Config/exclusion presets shareable between machines
 - `ramsvr schedule install/remove` (Task Scheduler automation from the CLI itself)
 - PowerShell module wrapper with native cmdlets
 - Code signing + winget manifest
+- True standby-list-size reading (see above)

@@ -33,9 +33,11 @@ public static class CleanupEngine
 {
     public static CleanupResult Run(CleanMode mode)
     {
-        var commands = mode == CleanMode.Full
-            ? new[] { MemoryListCommand.EmptyWorkingSets, MemoryListCommand.EmptyModifiedPageList, MemoryListCommand.EmptyStandbyList }
-            : new[] { MemoryListCommand.EmptyPriority0StandbyList };
+        var commands = mode switch
+        {
+            CleanMode.Moderate => new[] { MemoryListCommand.EmptyWorkingSets, MemoryListCommand.EmptyPriority0StandbyList },
+            _ => new[] { MemoryListCommand.EmptyPriority0StandbyList }
+        };
 
         return RunCommands(commands, mode);
     }
