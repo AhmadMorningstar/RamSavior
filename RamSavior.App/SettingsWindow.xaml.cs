@@ -21,6 +21,9 @@ public partial class SettingsWindow : FluentWindow
     /// <summary>Lets MainWindow show/hide the Experimental section immediately.</summary>
     public Action? ExperimentalFeaturesChanged { get; set; }
 
+    /// <summary>Lets MainWindow/App refresh the automation summary and restart the poll loop.</summary>
+    public Action? AutomationChanged { get; set; }
+
     public SettingsWindow(AppSettings settings)
     {
         InitializeComponent();
@@ -39,6 +42,18 @@ public partial class SettingsWindow : FluentWindow
         CompactModeCheckBox.IsChecked = _settings.CompactMode;
         AdvancedCheckBox.IsChecked = _settings.EnableAdvancedCleaning;
         ExperimentalCheckBox.IsChecked = _settings.EnableExperimentalFeatures;
+
+        var auto = _settings.Automation;
+        AutomationEnabledCheckBox.IsChecked = auto.Enabled;
+        IntervalEnabledCheckBox.IsChecked = auto.IntervalEnabled;
+        IntervalMinutesBox.Text = auto.IntervalMinutes.ToString();
+        FreeMemThresholdCheckBox.IsChecked = auto.FreeMemoryThresholdEnabled;
+        FreeMemGbBox.Text = auto.FreeMemoryBelowGB.ToString("F1");
+        LoadPercentThresholdCheckBox.IsChecked = auto.LoadPercentThresholdEnabled;
+        LoadPercentBox.Text = auto.LoadAbovePercent.ToString();
+        IdleMinutesBox.Text = auto.RequireIdleMinutes.ToString();
+        ExcludedProcessesBox.Text = string.Join(", ", auto.ExcludedProcessNames);
+
         _isLoaded = true;
 
         HighlightSelectedSwatch();
@@ -48,7 +63,7 @@ public partial class SettingsWindow : FluentWindow
     {
         foreach (var preset in AccentPresets.All)
         {
-            var color = (Color)ColorConverter.ConvertFromString(preset.Hex)!;
+            var color = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(preset.Hex)!;
 
             var swatch = new Border
             {
@@ -58,7 +73,7 @@ public partial class SettingsWindow : FluentWindow
                 CornerRadius = new CornerRadius(8),
                 Background = new SolidColorBrush(color),
                 BorderThickness = new Thickness(2),
-                BorderBrush = Brushes.Transparent,
+                BorderBrush = System.Windows.Media.Brushes.Transparent,
                 Cursor = System.Windows.Input.Cursors.Hand,
                 ToolTip = preset.Name
             };
@@ -83,8 +98,8 @@ public partial class SettingsWindow : FluentWindow
         foreach (var (hex, border) in _swatchBorders)
         {
             border.BorderBrush = hex == _settings.AccentColorHex
-                ? Brushes.White
-                : Brushes.Transparent;
+                ? System.Windows.Media.Brushes.White
+                : System.Windows.Media.Brushes.Transparent;
         }
     }
 
@@ -132,5 +147,54 @@ public partial class SettingsWindow : FluentWindow
         SettingsStore.Save(_settings);
         StatusText.Text = _settings.EnableExperimentalFeatures ? "Experimental features enabled." : "Experimental features disabled.";
         ExperimentalFeaturesChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Single handler for every automation field (checkboxes fire on Checked/Unchecked,
+    /// text boxes on LostFocus) — reads the whole automation panel back into settings
+    /// each time rather than wiring 8 separate handlers, since they all need to save +
+    /// notify together anyway.
+    /// </summary>
+    private void AutomationSetting_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_isLoaded) return;
+
+        var auto = _settings.Automation;
+
+        auto.Enabled = AutomationEnabledCheckBox.IsChecked == true;
+        auto.IntervalEnabled = IntervalEnabledCheckBox.IsChecked == true;
+        auto.IntervalMinutes = ParseIntOrDefault(IntervalMinutesBox.Text, auto.IntervalMinutes, min: 1, max: 1440);
+        IntervalMinutesBox.Text = auto.IntervalMinutes.ToString();
+
+        auto.FreeMemoryThresholdEnabled = FreeMemThresholdCheckBox.IsChecked == true;
+        auto.FreeMemoryBelowGB = ParseDoubleOrDefault(FreeMemGbBox.Text, auto.FreeMemoryBelowGB, min: 0.1, max: 256);
+        FreeMemGbBox.Text = auto.FreeMemoryBelowGB.ToString("F1");
+
+        auto.LoadPercentThresholdEnabled = LoadPercentThresholdCheckBox.IsChecked == true;
+        auto.LoadAbovePercent = ParseIntOrDefault(LoadPercentBox.Text, auto.LoadAbovePercent, min: 1, max: 99);
+        LoadPercentBox.Text = auto.LoadAbovePercent.ToString();
+
+        auto.RequireIdleMinutes = ParseIntOrDefault(IdleMinutesBox.Text, auto.RequireIdleMinutes, min: 0, max: 1440);
+        IdleMinutesBox.Text = auto.RequireIdleMinutes.ToString();
+
+        auto.ExcludedProcessNames = ExcludedProcessesBox.Text
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .ToList();
+
+        SettingsStore.Save(_settings);
+        StatusText.Text = auto.Enabled ? "Automation settings saved." : "Automation is off.";
+        AutomationChanged?.Invoke();
+    }
+
+    private static int ParseIntOrDefault(string text, int fallback, int min, int max)
+    {
+        if (!int.TryParse(text, out int value)) return fallback;
+        return Math.Clamp(value, min, max);
+    }
+
+    private static double ParseDoubleOrDefault(string text, double fallback, double min, double max)
+    {
+        if (!double.TryParse(text, out double value)) return fallback;
+        return Math.Clamp(value, min, max);
     }
 }

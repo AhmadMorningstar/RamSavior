@@ -14,8 +14,9 @@ public partial class MainWindow : FluentWindow
 {
     private readonly DispatcherTimer _pollTimer;
     private readonly AppSettings _settings;
-    private readonly Dictionary<MemoryListCommand, CheckBox> _customCheckboxes = new();
+    private readonly Dictionary<MemoryListCommand, System.Windows.Controls.CheckBox> _customCheckboxes = new();
     private readonly Dictionary<MemoryListCommand, StackPanel> _customRowContainers = new();
+    private bool _isLoaded;
 
     public MainWindow(AppSettings settings)
     {
@@ -24,25 +25,34 @@ public partial class MainWindow : FluentWindow
 
         BuildCustomItemsPanel();
         ApplyCompactMode();
-        ApplyExperimentalVisibility();
+        ApplyTierGating();
+        RefreshAutomationSummary();
 
         _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         _pollTimer.Tick += (_, _) => RefreshStatus();
         _pollTimer.Start();
 
         RefreshStatus();
+        _isLoaded = true;
     }
 
-    /// <summary>
-    /// Measures the window's natural content size once on first show, then locks that
-    /// as a normal, freely user-resizable Height/Width — gives a perfectly-fitted
-    /// startup size without permanently taking resize control away from the user like
-    /// SizeToContent alone would.
-    /// </summary>
+    // ----- Called from App.xaml.cs / tray -----
+
+    public void TriggerQuickClean() => Dispatcher.Invoke(() => CleanButton_Click(this, new RoutedEventArgs()));
+
+    public void NotifyAutomationRanInBackground(CleanupResult result)
+    {
+        RefreshStatus();
+        ResultText.Text = result.Success
+            ? $"Automation freed {result.FreedGB:F2} GB in the background just now."
+            : $"Automation attempt failed: {result.Error}";
+    }
+
+    // ----- Sizing -----
+
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
         SizeToContent = SizeToContent.Height;
-
         Dispatcher.BeginInvoke(new Action(() =>
         {
             SizeToContent = SizeToContent.Manual;
@@ -50,8 +60,6 @@ public partial class MainWindow : FluentWindow
         }), DispatcherPriority.ContextIdle);
     }
 
-    /// <summary>Re-measures and re-locks the size — used after Compact Mode or Experimental
-    /// visibility changes, since those change how tall the content naturally wants to be.</summary>
     private void ReflowWindowSize()
     {
         SizeToContent = SizeToContent.Height;
@@ -68,117 +76,60 @@ public partial class MainWindow : FluentWindow
         RootContent.LayoutTransform = new ScaleTransform(scale, scale);
     }
 
-    private void ApplyExperimentalVisibility()
-    {
-        ExperimentalSection.Visibility = _settings.EnableExperimentalFeatures
-            ? Visibility.Visible
-            : Visibility.Collapsed;
+    // ----- Automation quick card -----
 
-        if (_settings.EnableExperimentalFeatures && ProcessComboBox.Items.Count == 0)
-            RefreshProcessList();
+    private void RefreshAutomationSummary()
+    {
+        AutomationQuickToggle.IsChecked = _settings.Automation.Enabled;
+        AutomationStatusText.Text = _settings.Automation.Enabled ? "On" : "Off";
+
+        var parts = new List<string>();
+        if (_settings.Automation.IntervalEnabled)
+            parts.Add($"every {_settings.Automation.IntervalMinutes} min");
+        if (_settings.Automation.FreeMemoryThresholdEnabled)
+            parts.Add($"when free RAM drops below {_settings.Automation.FreeMemoryBelowGB:F1} GB");
+        if (_settings.Automation.LoadPercentThresholdEnabled)
+            parts.Add($"when load exceeds {_settings.Automation.LoadAbovePercent}%");
+        if (_settings.Automation.RequireIdleMinutes > 0)
+            parts.Add($"only while idle {_settings.Automation.RequireIdleMinutes}+ min");
+
+        AutomationSummaryText.Text = _settings.Automation.Enabled
+            ? (parts.Count > 0 ? $"Runs {_settings.AutomationTier}: {string.Join(", ", parts)}." : "Enabled, but no trigger conditions are set — configure below.")
+            : "Off. RAM Savior will only clean when you ask it to.";
     }
 
-    private void RefreshProcessList()
+    private void AutomationQuickToggle_Changed(object sender, RoutedEventArgs e)
     {
-        ProcessComboBox.Items.Clear();
+        if (!_isLoaded) return;
 
-        foreach (var proc in ProcessTrimmer.GetTopProcessesByMemory())
-        {
-            ProcessComboBox.Items.Add(new ComboBoxItem
-            {
-                Content = $"{proc.Name} (PID {proc.Pid}) \u2014 {proc.WorkingSetMB:F1} MB",
-                Tag = proc.Pid
-            });
-        }
-
-        if (ProcessComboBox.Items.Count > 0)
-            ProcessComboBox.SelectedIndex = 0;
+        _settings.Automation.Enabled = AutomationQuickToggle.IsChecked == true;
+        SettingsStore.Save(_settings);
+        RefreshAutomationSummary();
+        (System.Windows.Application.Current as App)?.RestartAutomationIfNeeded();
     }
 
-    private void RefreshProcessesButton_Click(object sender, RoutedEventArgs e) => RefreshProcessList();
-
-    private void TrimProcessButton_Click(object sender, RoutedEventArgs e)
+    private void ConfigureAutomationButton_Click(object sender, RoutedEventArgs e)
     {
-        if (ProcessComboBox.SelectedItem is not ComboBoxItem item || item.Tag is not int pid)
-        {
-            ExperimentalResultText.Text = "Pick a process first.";
-            return;
-        }
-
-        TrimProcessButton.IsEnabled = false;
-        ExperimentalResultText.Text = "Trimming...";
-
-        Task.Run(() => ProcessTrimmer.TrimProcess(pid)).ContinueWith(t =>
-        {
-            var (success, error) = t.Result;
-
-            Dispatcher.Invoke(() =>
-            {
-                TrimProcessButton.IsEnabled = true;
-                ExperimentalResultText.Text = success
-                    ? "Trimmed successfully."
-                    : $"Failed: {error}";
-            });
-        });
+        var settingsWindow = new SettingsWindow(_settings) { Owner = this };
+        WireSettingsCallbacks(settingsWindow);
+        settingsWindow.ShowDialog();
     }
 
-    private void BuildCustomItemsPanel()
+    // ----- Tier gating (Advanced/Experimental require opt-in from Settings) -----
+
+    private void ApplyTierGating()
     {
-        CustomItemsPanel.Children.Clear();
-        _customCheckboxes.Clear();
-        _customRowContainers.Clear();
+        AdvancedModeRadio.IsEnabled = _settings.EnableAdvancedCleaning;
+        AdvancedModeRadio.ToolTip = _settings.EnableAdvancedCleaning ? null : "Enable Advanced Cleaning in Settings to use this tier.";
 
-        foreach (var info in MemoryCommandCatalog.All)
-        {
-            var container = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
-            var headerRow = new DockPanel();
+        ExperimentalModeRadio.IsEnabled = _settings.EnableExperimentalFeatures;
+        ExperimentalModeRadio.ToolTip = _settings.EnableExperimentalFeatures ? null : "Enable Experimental Features in Settings to use this tier.";
 
-            var checkBox = new CheckBox
-            {
-                Content = info.Title,
-                FontWeight = FontWeights.SemiBold
-            };
-            DockPanel.SetDock(checkBox, Dock.Left);
-            headerRow.Children.Add(checkBox);
-
-            if (info.IsAdvanced)
-            {
-                var badge = new Border
-                {
-                    Background = new SolidColorBrush(Color.FromRgb(0xE5, 0x7A, 0x1A)),
-                    CornerRadius = new CornerRadius(4),
-                    Padding = new Thickness(6, 1, 6, 1),
-                    Margin = new Thickness(8, 0, 0, 0),
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Child = new System.Windows.Controls.TextBlock
-                    {
-                        Text = "ADVANCED",
-                        FontSize = 9,
-                        FontWeight = FontWeights.Bold,
-                        Foreground = Brushes.White
-                    }
-                };
-                headerRow.Children.Add(badge);
-            }
-
-            var description = new System.Windows.Controls.TextBlock
-            {
-                Text = info.Description,
-                FontSize = 11,
-                Opacity = 0.6,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(20, 2, 0, 0)
-            };
-
-            container.Children.Add(headerRow);
-            container.Children.Add(description);
-            CustomItemsPanel.Children.Add(container);
-
-            _customCheckboxes[info.Command] = checkBox;
-            _customRowContainers[info.Command] = container;
-        }
+        if (AdvancedModeRadio.IsChecked == true && !_settings.EnableAdvancedCleaning) NormalModeRadio.IsChecked = true;
+        if (ExperimentalModeRadio.IsChecked == true && !_settings.EnableExperimentalFeatures) NormalModeRadio.IsChecked = true;
 
         ApplyAdvancedGating();
+        ApplyExperimentalVisibility();
     }
 
     private void ApplyAdvancedGating()
@@ -201,27 +152,137 @@ public partial class MainWindow : FluentWindow
         }
     }
 
+    private void ApplyExperimentalVisibility()
+    {
+        bool show = _settings.EnableExperimentalFeatures && ExperimentalModeRadio.IsChecked == true;
+        ExperimentalSection.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+
+        if (show && ProcessComboBox.Items.Count == 0)
+            RefreshProcessList();
+    }
+
+    private void RefreshProcessList()
+    {
+        ProcessComboBox.Items.Clear();
+
+        foreach (var proc in ProcessTrimmer.GetTopProcessesByMemory())
+        {
+            ProcessComboBox.Items.Add(new System.Windows.Controls.ComboBoxItem
+            {
+                Content = $"{proc.Name} (PID {proc.Pid}) \u2014 {proc.WorkingSetMB:F1} MB",
+                Tag = proc.Pid
+            });
+        }
+
+        if (ProcessComboBox.Items.Count > 0)
+            ProcessComboBox.SelectedIndex = 0;
+    }
+
+    private void RefreshProcessesButton_Click(object sender, RoutedEventArgs e) => RefreshProcessList();
+
+    private void TrimProcessButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (ProcessComboBox.SelectedItem is not System.Windows.Controls.ComboBoxItem item || item.Tag is not int pid)
+        {
+            ExperimentalResultText.Text = "Pick a process first.";
+            return;
+        }
+
+        TrimProcessButton.IsEnabled = false;
+        ExperimentalResultText.Text = "Trimming...";
+
+        Task.Run(() => ProcessTrimmer.TrimProcess(pid)).ContinueWith(t =>
+        {
+            var (success, error) = t.Result;
+
+            Dispatcher.Invoke(() =>
+            {
+                TrimProcessButton.IsEnabled = true;
+                ExperimentalResultText.Text = success ? "Trimmed successfully." : $"Failed: {error}";
+            });
+        });
+    }
+
+    private void BuildCustomItemsPanel()
+    {
+        CustomItemsPanel.Children.Clear();
+        _customCheckboxes.Clear();
+        _customRowContainers.Clear();
+
+        foreach (var info in MemoryCommandCatalog.All)
+        {
+            var container = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+            var headerRow = new DockPanel();
+
+            var checkBox = new System.Windows.Controls.CheckBox { Content = info.Title, FontWeight = FontWeights.SemiBold };
+            DockPanel.SetDock(checkBox, Dock.Left);
+            headerRow.Children.Add(checkBox);
+
+            if (info.IsAdvanced)
+            {
+                var badge = new Border
+                {
+                    Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE5, 0x7A, 0x1A)),
+                    CornerRadius = new CornerRadius(4),
+                    Padding = new Thickness(6, 1, 6, 1),
+                    Margin = new Thickness(8, 0, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Child = new System.Windows.Controls.TextBlock
+                    {
+                        Text = "ADVANCED",
+                        FontSize = 9,
+                        FontWeight = FontWeights.Bold,
+                        Foreground = System.Windows.Media.Brushes.White
+                    }
+                };
+                headerRow.Children.Add(badge);
+            }
+
+            var description = new System.Windows.Controls.TextBlock
+            {
+                Text = info.Description,
+                FontSize = 11,
+                Opacity = 0.6,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(20, 2, 0, 0)
+            };
+
+            container.Children.Add(headerRow);
+            container.Children.Add(description);
+            CustomItemsPanel.Children.Add(container);
+
+            _customCheckboxes[info.Command] = checkBox;
+            _customRowContainers[info.Command] = container;
+        }
+    }
+
     private void ModeRadio_Checked(object sender, RoutedEventArgs e)
     {
         if (CustomPanel is null) return;
-        CustomPanel.Visibility = CustomModeRadio.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+
+        bool isCustomStyleTier = AdvancedModeRadio.IsChecked == true || ExperimentalModeRadio.IsChecked == true;
+        CustomPanel.Visibility = isCustomStyleTier ? Visibility.Visible : Visibility.Collapsed;
+
+        ApplyExperimentalVisibility();
     }
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
         var settingsWindow = new SettingsWindow(_settings) { Owner = this };
-        settingsWindow.AdvancedCleaningChanged = ApplyAdvancedGating;
-        settingsWindow.CompactModeChanged = () =>
-        {
-            ApplyCompactMode();
-            ReflowWindowSize();
-        };
-        settingsWindow.ExperimentalFeaturesChanged = () =>
-        {
-            ApplyExperimentalVisibility();
-            ReflowWindowSize();
-        };
+        WireSettingsCallbacks(settingsWindow);
         settingsWindow.ShowDialog();
+    }
+
+    private void WireSettingsCallbacks(SettingsWindow settingsWindow)
+    {
+        settingsWindow.AdvancedCleaningChanged = () => { ApplyTierGating(); };
+        settingsWindow.CompactModeChanged = () => { ApplyCompactMode(); ReflowWindowSize(); };
+        settingsWindow.ExperimentalFeaturesChanged = () => { ApplyTierGating(); ReflowWindowSize(); };
+        settingsWindow.AutomationChanged = () =>
+        {
+            RefreshAutomationSummary();
+            (System.Windows.Application.Current as App)?.RestartAutomationIfNeeded();
+        };
     }
 
     private void RefreshStatus()
@@ -238,7 +299,7 @@ public partial class MainWindow : FluentWindow
     {
         Func<CleanupResult> runAction;
 
-        if (CustomModeRadio.IsChecked == true)
+        if (AdvancedModeRadio.IsChecked == true || ExperimentalModeRadio.IsChecked == true)
         {
             var selected = _customCheckboxes
                 .Where(kv => kv.Value.IsChecked == true)
@@ -255,7 +316,7 @@ public partial class MainWindow : FluentWindow
         }
         else
         {
-            var mode = FullModeRadio.IsChecked == true ? CleanMode.Full : CleanMode.Smart;
+            var mode = ModerateModeRadio.IsChecked == true ? CleanMode.Moderate : CleanMode.Normal;
             runAction = () => CleanupEngine.Run(mode);
         }
 

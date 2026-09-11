@@ -3,8 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="RAM Savior"
-        Width="440"
-        MinHeight="360" MinWidth="380"
+        Width="460"
+        MinHeight="360" MinWidth="400"
         WindowBackdropType="Mica"
         ExtendsContentIntoTitleBar="True"
         WindowStartupLocation="CenterScreen"
@@ -38,22 +38,43 @@
                 <StackPanel Margin="4">
                     <TextBlock x:Name="AvailableText" Text="-- GB available" FontSize="28" FontWeight="Bold"/>
                     <TextBlock x:Name="TotalText" Text="of -- GB total" Opacity="0.6" Margin="0,0,0,12"/>
-                    <ui:ProgressRing x:Name="LoadRing" Progress="0" IsIndeterminate="False" Width="0" Height="0"/>
                     <ProgressBar x:Name="LoadBar" Minimum="0" Maximum="100" Value="0" Height="8"/>
                     <TextBlock x:Name="LoadPercentText" Text="0% memory load" Margin="0,4,0,0" Opacity="0.6"/>
                 </StackPanel>
             </ui:CardExpander>
 
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Automation" FontSize="14" FontWeight="SemiBold" Opacity="0.7" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" x:Name="AutomationStatusText" Text="Off" FontSize="11" Opacity="0.6" VerticalAlignment="Center"/>
+            </Grid>
+
+            <ui:CardControl Margin="0,0,0,16">
+                <StackPanel>
+                    <CheckBox x:Name="AutomationQuickToggle" Content="Clean automatically in the background" Checked="AutomationQuickToggle_Changed" Unchecked="AutomationQuickToggle_Changed"/>
+                    <TextBlock x:Name="AutomationSummaryText" Margin="0,4,0,8" FontSize="11" Opacity="0.6" TextWrapping="Wrap"/>
+                    <ui:Button Content="Configure Automation" Appearance="Secondary" HorizontalAlignment="Left" Click="ConfigureAutomationButton_Click"/>
+                </StackPanel>
+            </ui:CardControl>
+
             <TextBlock Text="Clean Mode" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
 
             <ui:CardControl Margin="0,0,0,8" Icon="{ui:SymbolIcon Symbol=Options24}">
                 <StackPanel>
-                    <RadioButton x:Name="SmartModeRadio" Content="Smart Clean (recommended)" IsChecked="True" GroupName="Mode" Checked="ModeRadio_Checked"/>
-                    <TextBlock Text="Targets low-reuse cache only. Minimal disk-reload risk." Opacity="0.6" FontSize="11" Margin="20,2,0,6"/>
-                    <RadioButton x:Name="FullModeRadio" Content="Full Purge" GroupName="Mode" Checked="ModeRadio_Checked"/>
-                    <TextBlock Text="Flushes all standby cache, including hot pages. May cause brief disk activity as apps reload data." Opacity="0.6" FontSize="11" Margin="20,2,0,6" TextWrapping="Wrap"/>
-                    <RadioButton x:Name="CustomModeRadio" Content="Custom" GroupName="Mode" Checked="ModeRadio_Checked"/>
-                    <TextBlock Text="Pick exactly which cleanup actions to run." Opacity="0.6" FontSize="11" Margin="20,2,0,0" TextWrapping="Wrap"/>
+                    <RadioButton x:Name="NormalModeRadio" Content="Normal (recommended)" IsChecked="True" GroupName="Mode" Checked="ModeRadio_Checked"/>
+                    <TextBlock Text="Targets low-reuse standby cache only. Minimal disk-reload risk. Safe default for automation." Opacity="0.6" FontSize="11" Margin="20,2,0,6" TextWrapping="Wrap"/>
+
+                    <RadioButton x:Name="ModerateModeRadio" Content="Moderate" GroupName="Mode" Checked="ModeRadio_Checked"/>
+                    <TextBlock Text="Also flushes working sets for a bit more freed memory. Still low risk." Opacity="0.6" FontSize="11" Margin="20,2,0,6" TextWrapping="Wrap"/>
+
+                    <RadioButton x:Name="AdvancedModeRadio" Content="Advanced" GroupName="Mode" Checked="ModeRadio_Checked"/>
+                    <TextBlock Text="Pick exactly which cleanup actions to run, including options that may briefly affect responsiveness." Opacity="0.6" FontSize="11" Margin="20,2,0,6" TextWrapping="Wrap"/>
+
+                    <RadioButton x:Name="ExperimentalModeRadio" Content="Experimental" GroupName="Mode" Checked="ModeRadio_Checked"/>
+                    <TextBlock Text="Everything in Advanced, plus per-process memory trimming." Opacity="0.6" FontSize="11" Margin="20,2,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
             </ui:CardControl>
 

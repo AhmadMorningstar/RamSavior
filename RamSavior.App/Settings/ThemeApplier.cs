@@ -21,7 +21,7 @@ public static class ThemeApplier
         // on top of the known library bug below.
         ApplicationThemeManager.Apply(theme, Wpf.Ui.Controls.WindowBackdropType.Mica, updateAccent: false);
 
-        var color = (Color)ColorConverter.ConvertFromString(settings.AccentColorHex)!;
+        var color = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(settings.AccentColorHex)!;
         ApplicationAccentColorManager.Apply(color, theme, false);
 
         // --- Workaround for a known open WPF-UI bug (lepoco/wpfui#1481): the built-in
@@ -31,7 +31,7 @@ public static class ThemeApplier
         // override — safe even if a key name turns out unused by this WPF-UI version,
         // since an unmatched dictionary key is simply ignored, not an error. ---
         var brush = new SolidColorBrush(color);
-        var app = Application.Current;
+        var app = System.Windows.Application.Current;
         app.Resources["SystemAccentColor"] = color;
         app.Resources["SystemAccentColorPrimary"] = color;
         app.Resources["SystemAccentColorSecondary"] = color;
