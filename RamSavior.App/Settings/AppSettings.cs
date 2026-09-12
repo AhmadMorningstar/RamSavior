@@ -48,4 +48,14 @@ public class AppSettings
 
     /// <summary>Tracks whether we've already told the user "closing minimizes to tray" once.</summary>
     public bool HasShownTrayHint { get; set; } = false;
+
+    /// <summary>First-run onboarding — shown once, then never again unless settings are reset.</summary>
+    public bool HasSeenWelcome { get; set; } = false;
+
+    /// <summary>Backed by a Scheduled Task (see TaskSchedulerIntegration), not a registry Run key —
+    /// this app requires admin, and Run-key entries don't reliably re-elevate at logon.</summary>
+    public bool StartWithWindows { get; set; } = false;
+
+    /// <summary>Fixed at Ctrl+Alt+R for now — no key-capture UI yet, see project notes.</summary>
+    public bool GlobalHotkeyEnabled { get; set; } = false;
 }

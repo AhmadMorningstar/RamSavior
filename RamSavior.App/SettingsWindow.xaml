@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="Settings"
-        Height="700" Width="400"
+        Height="900" Width="400"
         MinHeight="420" MinWidth="360"
         WindowBackdropType="Mica"
         ExtendsContentIntoTitleBar="True"
@@ -94,6 +94,44 @@
 
                     <Separator Margin="0,0,0,10"/>
 
+                    <CheckBox x:Name="StandbyThresholdCheckBox" Content="Standby cache exceeds" Checked="AutomationSetting_Changed" Unchecked="AutomationSetting_Changed"/>
+                    <TextBlock Margin="20,2,0,4" FontSize="10" Opacity="0.5" TextWrapping="Wrap"
+                               Text="The ISLC-style condition: purges only when there's meaningful reclaimable cache, not just because free memory looks low."/>
+                    <Grid Margin="20,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="70"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0" x:Name="StandbyMbBox" LostFocus="AutomationSetting_Changed"/>
+                        <TextBlock Grid.Column="1" Text="MB" VerticalAlignment="Center" Margin="8,0,0,0" Opacity="0.6" FontSize="11"/>
+                    </Grid>
+
+                    <CheckBox x:Name="TimeOfDayCheckBox" Content="Also clean once daily at" Checked="AutomationSetting_Changed" Unchecked="AutomationSetting_Changed"/>
+                    <Grid Margin="20,4,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="70"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0" x:Name="TimeOfDayBox" LostFocus="AutomationSetting_Changed"/>
+                        <TextBlock Grid.Column="1" Text="24h, e.g. 03:00" VerticalAlignment="Center" Margin="8,0,0,0" Opacity="0.6" FontSize="11"/>
+                    </Grid>
+
+                    <Separator Margin="0,0,0,10"/>
+
+                    <CheckBox x:Name="PerProcessAutoTrimCheckBox" Content="Auto-trim any single process using more than" Checked="AutomationSetting_Changed" Unchecked="AutomationSetting_Changed"/>
+                    <TextBlock Margin="20,2,0,4" FontSize="10" Opacity="0.5" TextWrapping="Wrap"
+                               Text="Checked every 30 seconds, independent of the conditions above. Only trims the one process — never a system-wide purge."/>
+                    <Grid Margin="20,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="70"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0" x:Name="PerProcessMbBox" LostFocus="AutomationSetting_Changed"/>
+                        <TextBlock Grid.Column="1" Text="MB" VerticalAlignment="Center" Margin="8,0,0,0" Opacity="0.6" FontSize="11"/>
+                    </Grid>
+
+                    <Separator Margin="0,0,0,10"/>
+
                     <TextBlock Text="Only clean when the system has been idle for" FontSize="11" Margin="0,0,0,4"/>
                     <Grid Margin="0,0,0,10">
                         <Grid.ColumnDefinitions>
@@ -126,6 +164,31 @@
                     <CheckBox x:Name="ExperimentalCheckBox" Content="Enable Experimental Features" Checked="ExperimentalCheckBox_Changed" Unchecked="ExperimentalCheckBox_Changed"/>
                     <TextBlock Margin="0,4,0,0" FontSize="11" Opacity="0.8" TextWrapping="Wrap"
                                Text="Adds per-process memory trimming, using a different (documented, official) Windows API than the rest of this app. It targets one running app you pick rather than the whole system. Less tested here than the core cleaning modes — enable only if you're comfortable experimenting."/>
+                </StackPanel>
+            </Border>
+
+            <TextBlock Text="Startup &amp; Shortcuts" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+
+            <ui:CardControl Margin="0,0,0,16">
+                <StackPanel>
+                    <CheckBox x:Name="StartWithWindowsCheckBox" Content="Start RAM Savior when Windows starts" Checked="StartupSetting_Changed" Unchecked="StartupSetting_Changed"/>
+                    <TextBlock Margin="0,4,0,10" FontSize="11" Opacity="0.6" TextWrapping="Wrap"
+                               Text="Uses a Scheduled Task (not a registry entry) so elevation works correctly, since this app requires admin."/>
+
+                    <CheckBox x:Name="GlobalHotkeyCheckBox" Content="Enable global hotkey: Ctrl+Alt+R" Checked="StartupSetting_Changed" Unchecked="StartupSetting_Changed"/>
+                    <TextBlock Margin="0,4,0,0" FontSize="11" Opacity="0.6" TextWrapping="Wrap"
+                               Text="Triggers a Normal/Moderate clean (whichever is selected) from anywhere, even while gaming. Not customizable yet — fixed combination for now."/>
+                </StackPanel>
+            </ui:CardControl>
+
+            <TextBlock Text="Danger Zone" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+
+            <Border BorderBrush="#E5484D" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="Reset RAM Savior" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                    <TextBlock Opacity="0.7" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"
+                               Text="Turns off automation, removes the startup task and global hotkey, and deletes all saved settings and history. The app keeps running with defaults — this doesn't uninstall anything."/>
+                    <ui:Button Content="Reset Everything" Appearance="Danger" Click="ResetButton_Click"/>
                 </StackPanel>
             </Border>
 

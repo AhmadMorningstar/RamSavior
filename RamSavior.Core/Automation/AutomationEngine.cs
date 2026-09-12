@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using RamSavior.Core.Engine;
 using RamSavior.Core.Monitoring;
+using RamSavior.Core.ProcessTrim;
 
 namespace RamSavior.Core.Automation;
 
@@ -16,8 +17,10 @@ public sealed class AutomationEngine : IDisposable
     private readonly Func<AutomationTrigger> _getTrigger;
     private Timer? _pollTimer;
     private DateTime _lastCleanUtc = DateTime.MinValue;
+    private DateOnly _lastTimeOfDayRunDate = DateOnly.MinValue;
 
     public event Action<CleanupResult>? CleanupFired;
+    public event Action<string, double>? ProcessAutoTrimmed;
     public event Action<string>? Skipped;
 
     public AutomationEngine(Func<AutomationTrigger> getTrigger, Func<CleanupResult> cleanupAction)
@@ -28,9 +31,6 @@ public sealed class AutomationEngine : IDisposable
 
     public void Start()
     {
-        // Poll every 30s regardless of the user's interval setting — this is just how
-        // often we CHECK conditions, not how often we clean. Keeps threshold/idle
-        // conditions responsive without spinning a tight loop.
         _pollTimer ??= new Timer(_ => SafeTick(), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(30));
     }
 
@@ -67,13 +67,23 @@ public sealed class AutomationEngine : IDisposable
             return;
         }
 
-        if (trigger.RequireIdleMinutes > 0 && MemoryStatus.GetIdleTime() < TimeSpan.FromMinutes(trigger.RequireIdleMinutes))
+        bool idleOk = trigger.RequireIdleMinutes == 0 ||
+            MemoryStatus.GetIdleTime() >= TimeSpan.FromMinutes(trigger.RequireIdleMinutes);
+
+        // Per-process auto-trim runs independently of the idle gate and the system-wide
+        // conditions below — it's a much smaller, targeted action (one process's working
+        // set), not a system-wide purge, so it doesn't need the same caution.
+        if (trigger.PerProcessAutoTrimEnabled)
+            RunPerProcessAutoTrim(trigger.PerProcessAutoTrimAboveMB);
+
+        if (!idleOk)
         {
             Skipped?.Invoke("not_idle");
             return;
         }
 
         var reading = MemoryStatus.Read();
+        var composition = MemoryCompositionReader.TryRead();
 
         bool intervalDue = trigger.IntervalEnabled &&
             (DateTime.UtcNow - _lastCleanUtc) >= TimeSpan.FromMinutes(trigger.IntervalMinutes);
@@ -84,11 +94,40 @@ public sealed class AutomationEngine : IDisposable
         bool loadPercentDue = trigger.LoadPercentThresholdEnabled &&
             reading.MemoryLoadPercent >= trigger.LoadAbovePercent;
 
-        if (!intervalDue && !freeMemDue && !loadPercentDue) return;
+        bool standbyDue = trigger.StandbyListThresholdEnabled &&
+            composition is not null &&
+            composition.Value.StandbyTotalMB >= trigger.StandbyListAboveMB;
+
+        bool timeOfDayDue = trigger.TimeOfDayEnabled && IsTimeOfDayDue(trigger.TimeOfDay);
+
+        if (!intervalDue && !freeMemDue && !loadPercentDue && !standbyDue && !timeOfDayDue) return;
 
         var result = _cleanupAction();
         _lastCleanUtc = DateTime.UtcNow;
+        if (timeOfDayDue) _lastTimeOfDayRunDate = DateOnly.FromDateTime(DateTime.Now);
         CleanupFired?.Invoke(result);
+    }
+
+    private bool IsTimeOfDayDue(TimeSpan configuredTime)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        if (_lastTimeOfDayRunDate == today) return false; // already fired today
+
+        var now = DateTime.Now.TimeOfDay;
+        // Fires once we've passed the configured time, within a 5-minute window, so we
+        // don't miss it if a poll happens to land slightly after the mark.
+        return now >= configuredTime && now < configuredTime.Add(TimeSpan.FromMinutes(5));
+    }
+
+    private void RunPerProcessAutoTrim(double thresholdMB)
+    {
+        foreach (var proc in ProcessTrimmer.GetTopProcessesByMemory(count: 10))
+        {
+            if (proc.WorkingSetMB < thresholdMB) continue;
+
+            var (success, _) = ProcessTrimmer.TrimProcess(proc.Pid);
+            if (success) ProcessAutoTrimmed?.Invoke(proc.Name, proc.WorkingSetMB);
+        }
     }
 
     private static bool IsAnyExcludedProcessRunning(List<string> excludedNames)

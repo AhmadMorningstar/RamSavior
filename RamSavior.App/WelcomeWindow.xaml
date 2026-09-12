@@ -1,0 +1,38 @@
+<ui:FluentWindow x:Class="RamSavior.App.WelcomeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="Welcome to RAM Savior"
+        Height="480" Width="420"
+        WindowBackdropType="Mica"
+        ExtendsContentIntoTitleBar="True"
+        WindowStartupLocation="CenterScreen">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Title="Welcome" Grid.Row="0"/>
+
+        <StackPanel Grid.Row="1" Margin="28,12,28,24">
+            <TextBlock Text="RAM Savior" FontSize="24" FontWeight="Bold" Margin="0,0,0,4"/>
+            <TextBlock Text="A quick orientation before you dive in." Opacity="0.7" Margin="0,0,0,20" TextWrapping="Wrap"/>
+
+            <TextBlock FontWeight="SemiBold" Text="Four tiers, from safe to hands-on" Margin="0,0,0,4"/>
+            <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
+                       Text="Normal and Moderate are safe defaults — good for automation. Advanced lets you pick exactly which cleanup actions run. Experimental adds per-process memory trimming. Advanced and Experimental need to be turned on in Settings first."/>
+
+            <TextBlock FontWeight="SemiBold" Text="Automation runs in the background" Margin="0,0,0,4"/>
+            <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
+                       Text="Closing this window minimizes to the tray rather than exiting, so scheduled or threshold-based cleaning keeps working. Right-click the tray icon to fully exit."/>
+
+            <TextBlock FontWeight="SemiBold" Text="Nothing risky happens automatically" Margin="0,0,0,4"/>
+            <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,20"
+                       Text="Automation only ever runs Normal or Moderate — Advanced and Experimental actions always require you to trigger them yourself."/>
+
+            <ui:Button Content="Got it, let's go" Appearance="Primary" Height="40" Click="GotItButton_Click"/>
+        </StackPanel>
+    </Grid>
+</ui:FluentWindow>

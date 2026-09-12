@@ -15,6 +15,14 @@ public readonly record struct CleanupResult(
     TimeSpan Duration,
     string? Error);
 
+public readonly record struct DryRunResult(
+    CleanMode Mode,
+    IReadOnlyList<MemoryCommandInfo> WouldRun,
+    double CurrentAvailableGB,
+    double CurrentStandbyMB,
+    bool PrivilegesAvailable,
+    string? PrivilegeNote);
+
 /// <summary>
 /// Orchestrates the actual purge. Two things worth calling out:
 ///
@@ -58,6 +66,44 @@ public static class CleanupEngine
 
         var ordered = MemoryCommandCatalog.CanonicalOrder.Where(selected.Contains).ToArray();
         return RunCommands(ordered, CleanMode.Custom);
+    }
+
+    /// <summary>
+    /// Reports what a clean WOULD do — which commands, in what order — without touching
+    /// memory at all. Also surfaces whether privileges are actually available right now,
+    /// since that's the single most common way a clean silently fails.
+    /// </summary>
+    public static DryRunResult Preview(CleanMode mode)
+    {
+        var commands = mode switch
+        {
+            CleanMode.Moderate => new[] { MemoryListCommand.EmptyWorkingSets, MemoryListCommand.EmptyPriority0StandbyList },
+            _ => new[] { MemoryListCommand.EmptyPriority0StandbyList }
+        };
+
+        return BuildPreview(mode, commands);
+    }
+
+    public static DryRunResult PreviewCustom(IReadOnlySet<MemoryListCommand> selected)
+    {
+        var ordered = MemoryCommandCatalog.CanonicalOrder.Where(selected.Contains).ToArray();
+        return BuildPreview(CleanMode.Custom, ordered);
+    }
+
+    private static DryRunResult BuildPreview(CleanMode mode, IReadOnlyList<MemoryListCommand> commands)
+    {
+        var infos = commands
+            .Select(c => MemoryCommandCatalog.All.First(i => i.Command == c))
+            .ToList();
+
+        var (privilegesOk, privilegeError) = PrivilegeManager.EnableRequiredPrivileges();
+        var reading = MemoryStatus.Read();
+        var composition = MemoryCompositionReader.TryRead();
+
+        return new DryRunResult(
+            mode, infos, reading.AvailablePhysicalGB,
+            composition?.StandbyTotalMB ?? -1,
+            privilegesOk, privilegesOk ? null : privilegeError);
     }
 
     private static CleanupResult RunCommands(IReadOnlyList<MemoryListCommand> commands, CleanMode mode)

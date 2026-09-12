@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using RamSavior.App.Settings;
+using RamSavior.Core.Automation;
 using Wpf.Ui.Controls;
 
 namespace RamSavior.App;
@@ -12,17 +13,12 @@ public partial class SettingsWindow : FluentWindow
     private bool _isLoaded;
     private readonly Dictionary<string, Border> _swatchBorders = new();
 
-    /// <summary>Lets MainWindow refresh its Custom-mode checkbox list immediately when this toggles.</summary>
     public Action? AdvancedCleaningChanged { get; set; }
-
-    /// <summary>Lets MainWindow re-run its auto-fit sizing when compact mode changes.</summary>
     public Action? CompactModeChanged { get; set; }
-
-    /// <summary>Lets MainWindow show/hide the Experimental section immediately.</summary>
     public Action? ExperimentalFeaturesChanged { get; set; }
-
-    /// <summary>Lets MainWindow/App refresh the automation summary and restart the poll loop.</summary>
     public Action? AutomationChanged { get; set; }
+    public Action? StartWithWindowsChanged { get; set; }
+    public Action? GlobalHotkeyChanged { get; set; }
 
     public SettingsWindow(AppSettings settings)
     {
@@ -42,6 +38,8 @@ public partial class SettingsWindow : FluentWindow
         CompactModeCheckBox.IsChecked = _settings.CompactMode;
         AdvancedCheckBox.IsChecked = _settings.EnableAdvancedCleaning;
         ExperimentalCheckBox.IsChecked = _settings.EnableExperimentalFeatures;
+        StartWithWindowsCheckBox.IsChecked = _settings.StartWithWindows;
+        GlobalHotkeyCheckBox.IsChecked = _settings.GlobalHotkeyEnabled;
 
         var auto = _settings.Automation;
         AutomationEnabledCheckBox.IsChecked = auto.Enabled;
@@ -51,6 +49,12 @@ public partial class SettingsWindow : FluentWindow
         FreeMemGbBox.Text = auto.FreeMemoryBelowGB.ToString("F1");
         LoadPercentThresholdCheckBox.IsChecked = auto.LoadPercentThresholdEnabled;
         LoadPercentBox.Text = auto.LoadAbovePercent.ToString();
+        StandbyThresholdCheckBox.IsChecked = auto.StandbyListThresholdEnabled;
+        StandbyMbBox.Text = auto.StandbyListAboveMB.ToString("F0");
+        TimeOfDayCheckBox.IsChecked = auto.TimeOfDayEnabled;
+        TimeOfDayBox.Text = auto.TimeOfDay.ToString(@"hh\:mm");
+        PerProcessAutoTrimCheckBox.IsChecked = auto.PerProcessAutoTrimEnabled;
+        PerProcessMbBox.Text = auto.PerProcessAutoTrimAboveMB.ToString("F0");
         IdleMinutesBox.Text = auto.RequireIdleMinutes.ToString();
         ExcludedProcessesBox.Text = string.Join(", ", auto.ExcludedProcessNames);
 
@@ -149,10 +153,50 @@ public partial class SettingsWindow : FluentWindow
         ExperimentalFeaturesChanged?.Invoke();
     }
 
+    private void StartupSetting_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_isLoaded) return;
+
+        bool startChanged = _settings.StartWithWindows != (StartWithWindowsCheckBox.IsChecked == true);
+        bool hotkeyChanged = _settings.GlobalHotkeyEnabled != (GlobalHotkeyCheckBox.IsChecked == true);
+
+        _settings.StartWithWindows = StartWithWindowsCheckBox.IsChecked == true;
+        _settings.GlobalHotkeyEnabled = GlobalHotkeyCheckBox.IsChecked == true;
+        SettingsStore.Save(_settings);
+
+        StatusText.Text = "Startup settings saved.";
+        if (startChanged) StartWithWindowsChanged?.Invoke();
+        if (hotkeyChanged) GlobalHotkeyChanged?.Invoke();
+    }
+
+    private void ResetButton_Click(object sender, RoutedEventArgs e)
+    {
+        var result = System.Windows.MessageBox.Show(
+            this,
+            "This turns off automation, removes the startup task and hotkey, and deletes all saved settings and history. Continue?",
+            "Reset RAM Savior",
+            System.Windows.MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (result != System.Windows.MessageBoxResult.Yes) return;
+
+        _settings.Automation.Enabled = false;
+        _settings.StartWithWindows = false;
+        _settings.GlobalHotkeyEnabled = false;
+
+        AutomationChanged?.Invoke();
+        StartWithWindowsChanged?.Invoke();
+        GlobalHotkeyChanged?.Invoke();
+
+        SettingsStore.ResetToDefaultsAndDeleteHistory();
+
+        StatusText.Text = "Reset complete. Restart RAM Savior to fully apply defaults.";
+    }
+
     /// <summary>
     /// Single handler for every automation field (checkboxes fire on Checked/Unchecked,
     /// text boxes on LostFocus) — reads the whole automation panel back into settings
-    /// each time rather than wiring 8 separate handlers, since they all need to save +
+    /// each time rather than wiring many separate handlers, since they all need to save +
     /// notify together anyway.
     /// </summary>
     private void AutomationSetting_Changed(object sender, RoutedEventArgs e)
@@ -173,6 +217,18 @@ public partial class SettingsWindow : FluentWindow
         auto.LoadPercentThresholdEnabled = LoadPercentThresholdCheckBox.IsChecked == true;
         auto.LoadAbovePercent = ParseIntOrDefault(LoadPercentBox.Text, auto.LoadAbovePercent, min: 1, max: 99);
         LoadPercentBox.Text = auto.LoadAbovePercent.ToString();
+
+        auto.StandbyListThresholdEnabled = StandbyThresholdCheckBox.IsChecked == true;
+        auto.StandbyListAboveMB = ParseDoubleOrDefault(StandbyMbBox.Text, auto.StandbyListAboveMB, min: 64, max: 262144);
+        StandbyMbBox.Text = auto.StandbyListAboveMB.ToString("F0");
+
+        auto.TimeOfDayEnabled = TimeOfDayCheckBox.IsChecked == true;
+        auto.TimeOfDay = ParseTimeOfDayOrDefault(TimeOfDayBox.Text, auto.TimeOfDay);
+        TimeOfDayBox.Text = auto.TimeOfDay.ToString(@"hh\:mm");
+
+        auto.PerProcessAutoTrimEnabled = PerProcessAutoTrimCheckBox.IsChecked == true;
+        auto.PerProcessAutoTrimAboveMB = ParseDoubleOrDefault(PerProcessMbBox.Text, auto.PerProcessAutoTrimAboveMB, min: 50, max: 65536);
+        PerProcessMbBox.Text = auto.PerProcessAutoTrimAboveMB.ToString("F0");
 
         auto.RequireIdleMinutes = ParseIntOrDefault(IdleMinutesBox.Text, auto.RequireIdleMinutes, min: 0, max: 1440);
         IdleMinutesBox.Text = auto.RequireIdleMinutes.ToString();
@@ -196,5 +252,12 @@ public partial class SettingsWindow : FluentWindow
     {
         if (!double.TryParse(text, out double value)) return fallback;
         return Math.Clamp(value, min, max);
+    }
+
+    private static TimeSpan ParseTimeOfDayOrDefault(string text, TimeSpan fallback)
+    {
+        return TimeSpan.TryParse(text, out var value) && value >= TimeSpan.Zero && value < TimeSpan.FromDays(1)
+            ? value
+            : fallback;
     }
 }

@@ -15,6 +15,13 @@ internal static class NativeMethods
         IntPtr systemInformation,
         int systemInformationLength);
 
+    [DllImport("ntdll.dll")]
+    internal static extern int NtQuerySystemInformation(
+        int systemInformationClass,
+        IntPtr systemInformation,
+        int systemInformationLength,
+        out int returnLength);
+
     internal const int SystemMemoryListInformation = 0x50; // 80 decimal, stable across Win10/11
 
     // ---- kernel32.dll ----
