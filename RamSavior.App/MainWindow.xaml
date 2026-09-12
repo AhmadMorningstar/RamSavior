@@ -27,11 +27,19 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="Memory Status" FontSize="14" FontWeight="SemiBold" Opacity="0.7" VerticalAlignment="Center"/>
-                <ui:Button Grid.Column="1" x:Name="SettingsButton"
-                           Icon="{ui:SymbolIcon Symbol=Settings24}"
-                           Appearance="Secondary"
-                           Width="32" Height="32" Padding="0"
-                           Click="SettingsButton_Click"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <ui:Button x:Name="HistoryButton"
+                               Icon="{ui:SymbolIcon Symbol=Options24}"
+                               Appearance="Secondary"
+                               Width="32" Height="32" Padding="0" Margin="0,0,6,0"
+                               ToolTip="History"
+                               Click="HistoryButton_Click"/>
+                    <ui:Button Grid.Column="1" x:Name="SettingsButton"
+                               Icon="{ui:SymbolIcon Symbol=Settings24}"
+                               Appearance="Secondary"
+                               Width="32" Height="32" Padding="0"
+                               Click="SettingsButton_Click"/>
+                </StackPanel>
             </Grid>
 
             <ui:CardExpander IsExpanded="True" Margin="0,0,0,16">
@@ -39,7 +47,13 @@
                     <TextBlock x:Name="AvailableText" Text="-- GB available" FontSize="28" FontWeight="Bold"/>
                     <TextBlock x:Name="TotalText" Text="of -- GB total" Opacity="0.6" Margin="0,0,0,12"/>
                     <ProgressBar x:Name="LoadBar" Minimum="0" Maximum="100" Value="0" Height="8"/>
-                    <TextBlock x:Name="LoadPercentText" Text="0% memory load" Margin="0,4,0,0" Opacity="0.6"/>
+                    <TextBlock x:Name="LoadPercentText" Text="0% memory load" Margin="0,4,0,12" Opacity="0.6"/>
+
+                    <TextBlock Text="Composition" FontSize="11" FontWeight="SemiBold" Opacity="0.6" Margin="0,0,0,4"/>
+                    <Border CornerRadius="4" Height="14" ClipToBounds="True">
+                        <Grid x:Name="CompositionBar"/>
+                    </Border>
+                    <TextBlock x:Name="CompositionLegendText" Margin="0,6,0,0" FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
                 </StackPanel>
             </ui:CardExpander>
 
@@ -82,13 +96,15 @@
                 <StackPanel x:Name="CustomItemsPanel" Margin="4"/>
             </ui:CardExpander>
 
+            <CheckBox x:Name="DryRunCheckBox" Content="Dry run (show what would happen, change nothing)" Margin="0,0,0,4"/>
+
             <ui:Button x:Name="CleanButton"
                        Content="Purge Memory Now"
                        Appearance="Primary"
                        Icon="{ui:SymbolIcon Symbol=Broom24}"
                        Height="44"
                        FontWeight="SemiBold"
-                       Margin="0,16,0,0"
+                       Margin="0,4,0,0"
                        Click="CleanButton_Click"/>
 
             <TextBlock x:Name="ResultText" Margin="0,12,0,0" TextWrapping="Wrap" Opacity="0.8"/>
@@ -130,6 +146,7 @@
                                    Click="TrimProcessButton_Click"/>
 
                         <TextBlock x:Name="ExperimentalResultText" Margin="0,8,0,0" FontSize="11" TextWrapping="Wrap" Opacity="0.8"/>
+                        <TextBlock x:Name="LeakSuspectsText" Margin="0,8,0,0" FontSize="11" TextWrapping="Wrap" Opacity="0.8" Foreground="#E5A21A"/>
                     </StackPanel>
                 </ui:CardExpander>
             </StackPanel>

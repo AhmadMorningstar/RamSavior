@@ -1,6 +1,7 @@
 using RamSavior.App.Settings;
 using RamSavior.Core.Automation;
 using RamSavior.Core.Engine;
+using RamSavior.Core.Logging;
 
 namespace RamSavior.App.Automation;
 
@@ -10,12 +11,18 @@ public sealed class AutomationController : IDisposable
     private readonly AutomationEngine _engine;
 
     public event Action<CleanupResult>? CleanupFired;
+    public event Action<string, double>? ProcessAutoTrimmed;
 
     public AutomationController(AppSettings settings)
     {
         _settings = settings;
         _engine = new AutomationEngine(() => _settings.Automation, RunConfiguredClean);
-        _engine.CleanupFired += result => CleanupFired?.Invoke(result);
+        _engine.CleanupFired += result =>
+        {
+            JsonLogger.Append(SettingsStore.HistoryLogPath, result, source: "automation");
+            CleanupFired?.Invoke(result);
+        };
+        _engine.ProcessAutoTrimmed += (name, mb) => ProcessAutoTrimmed?.Invoke(name, mb);
     }
 
     private CleanupResult RunConfiguredClean()

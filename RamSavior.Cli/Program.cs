@@ -1,5 +1,6 @@
 using System.CommandLine;
 using System.Text.Json;
+using RamSavior.Core.Automation;
 using RamSavior.Core.Engine;
 using RamSavior.Core.Logging;
 using RamSavior.Core.Monitoring;
@@ -13,6 +14,21 @@ const int ExitOk = 0;
 const int ExitGeneralFailure = 1;
 const int ExitInsufficientPrivileges = 2;
 const int ExitSkipped = 3;
+
+// Colored output only when writing to a real console — piping to a file or another
+// program should get plain text, not ANSI escape codes mixed into the data.
+bool SupportsColor() => !Console.IsOutputRedirected;
+void WriteColored(string text, ConsoleColor color)
+{
+    if (!SupportsColor()) { Console.WriteLine(text); return; }
+    var prev = Console.ForegroundColor;
+    Console.ForegroundColor = color;
+    Console.WriteLine(text);
+    Console.ForegroundColor = prev;
+}
+void WriteSuccess(string text) => WriteColored(text, ConsoleColor.Green);
+void WriteWarn(string text) => WriteColored(text, ConsoleColor.Yellow);
+void WriteFail(string text) => WriteColored(text, ConsoleColor.Red);
 
 var jsonOption = new Option<bool>("--json", "-j")
 {
@@ -49,12 +65,18 @@ var itemsOption = new Option<string?>("--items")
                    "EmptyStandbyList, EmptyPriority0StandbyList."
 };
 
+var dryRunOption = new Option<bool>("--dry-run")
+{
+    Description = "Show what would run and current memory stats, without changing anything."
+};
+
 var rootCommand = new RootCommand(
     "RAM Savior (ramsvr) — Windows memory cleaner.\n" +
     "Quick start:\n" +
     "  ramsvr clean              Run a Smart (Normal-tier) clean, safe defaults.\n" +
+    "  ramsvr clean --dry-run    See what a clean would do without doing it.\n" +
     "  ramsvr status --watch     Watch live memory stats.\n" +
-    "  ramsvr clean --help       See every cleaning option, explained.\n" +
+    "  ramsvr schedule install --trigger startup   Run at every login.\n" +
     "Every command below has its own --help with plain-language descriptions.");
 
 // ---- clean ----
@@ -65,6 +87,7 @@ cleanCommand.Options.Add(quietOption);
 cleanCommand.Options.Add(forceOption);
 cleanCommand.Options.Add(logOption);
 cleanCommand.Options.Add(itemsOption);
+cleanCommand.Options.Add(dryRunOption);
 
 cleanCommand.SetAction(parseResult =>
 {
@@ -74,39 +97,63 @@ cleanCommand.SetAction(parseResult =>
     bool force = parseResult.GetValue(forceOption);
     string? logPath = parseResult.GetValue(logOption);
     string? itemsRaw = parseResult.GetValue(itemsOption);
+    bool dryRun = parseResult.GetValue(dryRunOption);
 
     if (!force && MemoryStatus.IsUserBusyOrFullscreen())
     {
         if (json)
             Console.WriteLine(JsonSerializer.Serialize(new { skipped = true, reason = "fullscreen_or_presentation" }));
         else if (!quiet)
-            Console.WriteLine("Skipped: fullscreen app or presentation mode detected. Use --force to override.");
+            WriteWarn("Skipped: fullscreen app or presentation mode detected. Use --force to override.");
 
         return ExitSkipped;
     }
 
-    CleanupResult result;
-
+    HashSet<MemoryListCommand>? selected = null;
     if (!string.IsNullOrWhiteSpace(itemsRaw))
     {
-        var selected = new HashSet<MemoryListCommand>();
+        selected = new HashSet<MemoryListCommand>();
         foreach (var token in itemsRaw.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
         {
             if (!Enum.TryParse<MemoryListCommand>(token, ignoreCase: true, out var parsed))
             {
-                Console.Error.WriteLine($"Unrecognized item '{token}'. Valid values: " +
-                    string.Join(", ", Enum.GetNames<MemoryListCommand>()));
+                WriteFail($"Unrecognized item '{token}'. Valid values: " + string.Join(", ", Enum.GetNames<MemoryListCommand>()));
                 return ExitGeneralFailure;
             }
             selected.Add(parsed);
         }
+    }
 
-        result = CleanupEngine.RunCustom(selected);
-    }
-    else
+    if (dryRun)
     {
-        result = CleanupEngine.Run(mode);
+        var preview = selected is not null ? CleanupEngine.PreviewCustom(selected) : CleanupEngine.Preview(mode);
+
+        if (json)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(new
+            {
+                dryRun = true,
+                mode = preview.Mode.ToString(),
+                wouldRun = preview.WouldRun.Select(i => i.Title),
+                currentAvailableGB = preview.CurrentAvailableGB,
+                currentStandbyMB = preview.CurrentStandbyMB,
+                privilegesAvailable = preview.PrivilegesAvailable,
+                privilegeNote = preview.PrivilegeNote
+            }));
+        }
+        else if (!quiet)
+        {
+            Console.WriteLine("Dry run — nothing was changed.");
+            Console.WriteLine($"  Would run: {(preview.WouldRun.Count == 0 ? "(nothing selected)" : string.Join(", ", preview.WouldRun.Select(i => i.Title)))}");
+            Console.WriteLine($"  Currently available: {preview.CurrentAvailableGB:F2} GB");
+            if (preview.CurrentStandbyMB >= 0) Console.WriteLine($"  Currently in standby: {preview.CurrentStandbyMB:F0} MB");
+            if (preview.PrivilegesAvailable) WriteSuccess("  Privileges: OK"); else WriteFail($"  Privileges: {preview.PrivilegeNote}");
+        }
+
+        return ExitOk;
     }
+
+    var result = selected is not null ? CleanupEngine.RunCustom(selected) : CleanupEngine.Run(mode);
 
     if (logPath is not null)
         JsonLogger.Append(logPath, result);
@@ -128,14 +175,14 @@ cleanCommand.SetAction(parseResult =>
     {
         if (result.Success)
         {
-            Console.WriteLine($"RAM Savior — {result.Mode} clean complete in {result.Duration.TotalMilliseconds:F0}ms");
+            WriteSuccess($"RAM Savior — {result.Mode} clean complete in {result.Duration.TotalMilliseconds:F0}ms");
             Console.WriteLine($"  Available before: {result.BeforeAvailableGB:F2} GB");
             Console.WriteLine($"  Available after:  {result.AfterAvailableGB:F2} GB");
             Console.WriteLine($"  Freed:            {result.FreedGB:F2} GB");
         }
         else
         {
-            Console.Error.WriteLine($"RAM Savior — cleanup failed: {result.Error}");
+            WriteFail($"RAM Savior — cleanup failed: {result.Error}");
         }
     }
 
@@ -189,7 +236,58 @@ statusCommand.SetAction(parseResult =>
     return ExitOk;
 });
 
+// ---- schedule ----
+const string CliScheduledTaskName = "RamSaviorCliSchedule";
+
+var triggerOption = new Option<string>("--trigger")
+{
+    Description = "'startup' runs at every login. 'interval' runs every --interval-minutes.",
+    DefaultValueFactory = _ => "startup"
+};
+var intervalMinutesOption = new Option<int>("--interval-minutes") { DefaultValueFactory = _ => 30 };
+var scheduleModeOption = new Option<CleanMode>("--mode") { DefaultValueFactory = _ => CleanMode.Normal };
+
+var scheduleCommand = new Command("schedule", "Manage a Windows Scheduled Task that runs ramsvr automatically.");
+
+var scheduleInstallCommand = new Command("install", "Create or update the scheduled task.");
+scheduleInstallCommand.Options.Add(triggerOption);
+scheduleInstallCommand.Options.Add(intervalMinutesOption);
+scheduleInstallCommand.Options.Add(scheduleModeOption);
+
+scheduleInstallCommand.SetAction(parseResult =>
+{
+    string trigger = parseResult.GetValue(triggerOption)!;
+    int intervalMinutes = parseResult.GetValue(intervalMinutesOption);
+    var mode = parseResult.GetValue(scheduleModeOption);
+
+    string exePath = Environment.ProcessPath ?? string.Empty;
+    string args = $"clean --mode {mode} --quiet";
+
+    var (success, error) = trigger.Equals("interval", StringComparison.OrdinalIgnoreCase)
+        ? TaskSchedulerIntegration.InstallIntervalTask(CliScheduledTaskName, exePath, args, intervalMinutes)
+        : TaskSchedulerIntegration.InstallStartupTask(CliScheduledTaskName, exePath, args);
+
+    if (success) { WriteSuccess($"Scheduled task '{CliScheduledTaskName}' installed ({trigger})."); return ExitOk; }
+
+    WriteFail($"Failed to install scheduled task: {error}");
+    return ExitGeneralFailure;
+});
+
+var scheduleRemoveCommand = new Command("remove", "Remove the scheduled task.");
+scheduleRemoveCommand.SetAction(_ =>
+{
+    var (success, error) = TaskSchedulerIntegration.RemoveTask(CliScheduledTaskName);
+    if (success) { WriteSuccess($"Scheduled task '{CliScheduledTaskName}' removed."); return ExitOk; }
+
+    WriteFail($"Failed to remove scheduled task: {error}");
+    return ExitGeneralFailure;
+});
+
+scheduleCommand.Subcommands.Add(scheduleInstallCommand);
+scheduleCommand.Subcommands.Add(scheduleRemoveCommand);
+
 rootCommand.Subcommands.Add(cleanCommand);
 rootCommand.Subcommands.Add(statusCommand);
+rootCommand.Subcommands.Add(scheduleCommand);
 
 return await rootCommand.Parse(args).InvokeAsync();
