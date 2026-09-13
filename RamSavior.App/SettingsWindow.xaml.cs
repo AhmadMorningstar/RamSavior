@@ -13,9 +13,7 @@ public partial class SettingsWindow : FluentWindow
     private bool _isLoaded;
     private readonly Dictionary<string, Border> _swatchBorders = new();
 
-    public Action? AdvancedCleaningChanged { get; set; }
     public Action? CompactModeChanged { get; set; }
-    public Action? ExperimentalFeaturesChanged { get; set; }
     public Action? AutomationChanged { get; set; }
     public Action? StartWithWindowsChanged { get; set; }
     public Action? GlobalHotkeyChanged { get; set; }
@@ -36,8 +34,6 @@ public partial class SettingsWindow : FluentWindow
         }).IsChecked = true;
 
         CompactModeCheckBox.IsChecked = _settings.CompactMode;
-        AdvancedCheckBox.IsChecked = _settings.EnableAdvancedCleaning;
-        ExperimentalCheckBox.IsChecked = _settings.EnableExperimentalFeatures;
         StartWithWindowsCheckBox.IsChecked = _settings.StartWithWindows;
         GlobalHotkeyCheckBox.IsChecked = _settings.GlobalHotkeyEnabled;
 
@@ -131,26 +127,6 @@ public partial class SettingsWindow : FluentWindow
         SettingsStore.Save(_settings);
         StatusText.Text = _settings.CompactMode ? "Compact Mode enabled." : "Compact Mode disabled.";
         CompactModeChanged?.Invoke();
-    }
-
-    private void AdvancedCheckBox_Changed(object sender, RoutedEventArgs e)
-    {
-        if (!_isLoaded) return;
-
-        _settings.EnableAdvancedCleaning = AdvancedCheckBox.IsChecked == true;
-        SettingsStore.Save(_settings);
-        StatusText.Text = _settings.EnableAdvancedCleaning ? "Advanced cleaning enabled." : "Advanced cleaning disabled.";
-        AdvancedCleaningChanged?.Invoke();
-    }
-
-    private void ExperimentalCheckBox_Changed(object sender, RoutedEventArgs e)
-    {
-        if (!_isLoaded) return;
-
-        _settings.EnableExperimentalFeatures = ExperimentalCheckBox.IsChecked == true;
-        SettingsStore.Save(_settings);
-        StatusText.Text = _settings.EnableExperimentalFeatures ? "Experimental features enabled." : "Experimental features disabled.";
-        ExperimentalFeaturesChanged?.Invoke();
     }
 
     private void StartupSetting_Changed(object sender, RoutedEventArgs e)

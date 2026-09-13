@@ -47,6 +47,38 @@ public static class ProcessTrimmer
         return results.OrderByDescending(p => p.WorkingSetMB).Take(count).ToList();
     }
 
+    /// <summary>
+    /// One entry per distinct process NAME (not per PID), alphabetically — built for the
+    /// Focus Mode picker, where a user hunting for "brave" or "worldoftanks" needs to find
+    /// it regardless of its current memory footprint, and where a multi-process app (many
+    /// browsers spawn dozens of processes under one name) should be picked once by name.
+    /// </summary>
+    public static IReadOnlyList<ProcessMemoryInfo> GetAllProcessesSortedByName()
+    {
+        var results = new List<ProcessMemoryInfo>();
+
+        foreach (var process in Process.GetProcesses())
+        {
+            try
+            {
+                results.Add(new ProcessMemoryInfo(process.Id, process.ProcessName, process.WorkingSet64 / 1024.0 / 1024.0));
+            }
+            catch
+            {
+            }
+            finally
+            {
+                process.Dispose();
+            }
+        }
+
+        return results
+            .GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.OrderByDescending(p => p.WorkingSetMB).First())
+            .OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     public static (bool Success, string? Error) TrimProcess(int pid)
     {
         Process? process = null;

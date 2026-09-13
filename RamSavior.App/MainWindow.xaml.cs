@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
+using RamSavior.App.Automation;
 using RamSavior.App.Settings;
 using RamSavior.Core.Engine;
 using RamSavior.Core.Logging;
@@ -19,17 +20,24 @@ public partial class MainWindow : FluentWindow
     private readonly Dictionary<MemoryListCommand, System.Windows.Controls.CheckBox> _customCheckboxes = new();
     private readonly Dictionary<MemoryListCommand, StackPanel> _customRowContainers = new();
     private readonly ProcessMemoryTracker _leakTracker = new();
+    private readonly FocusModeController _focusModeController;
     private bool _isLoaded;
 
     public MainWindow(AppSettings settings)
     {
         InitializeComponent();
         _settings = settings;
+        _focusModeController = new FocusModeController(_settings);
+        _focusModeController.TickCompleted += result => Dispatcher.Invoke(() => OnFocusModeTick(result));
 
         BuildCustomItemsPanel();
         ApplyCompactMode();
-        ApplyTierGating();
+
+        _isLoaded = false;
+        UiModeComboBox.SelectedIndex = _settings.EnableExperimentalFeatures ? 2 : _settings.EnableAdvancedCleaning ? 1 : 0;
+        ApplyUiMode();
         RefreshAutomationSummary();
+        _isLoaded = true;
 
         _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         _pollTimer.Tick += (_, _) => RefreshStatus();
@@ -43,7 +51,6 @@ public partial class MainWindow : FluentWindow
         _leakScanTimer.Start();
 
         RefreshStatus();
-        _isLoaded = true;
     }
 
     // ----- Called from App.xaml.cs / tray -----
@@ -84,6 +91,47 @@ public partial class MainWindow : FluentWindow
     {
         double scale = _settings.CompactMode ? 0.85 : 1.0;
         RootContent.LayoutTransform = new ScaleTransform(scale, scale);
+    }
+
+    // ----- Top-level Mode selector: this is what makes the UI "completely change" -----
+
+    private void UiModeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_isLoaded) return;
+
+        _settings.EnableAdvancedCleaning = UiModeComboBox.SelectedIndex >= 1;
+        _settings.EnableExperimentalFeatures = UiModeComboBox.SelectedIndex >= 2;
+        SettingsStore.Save(_settings);
+
+        ApplyUiMode();
+        ReflowWindowSize();
+    }
+
+    private void ApplyUiMode()
+    {
+        int level = UiModeComboBox.SelectedIndex; // 0 Normal, 1 Advanced, 2 Experimental
+
+        ModeDescriptionText.Text = level switch
+        {
+            1 => "Full manual control over exactly what gets cleaned.",
+            2 => "Advanced, plus per-process tools that are newer and less battle-tested.",
+            _ => "Safe, automation-friendly cleaning using known Windows APIs."
+        };
+
+        CustomTierOption.Visibility = level >= 1 ? Visibility.Visible : Visibility.Collapsed;
+        ExperimentalArea.Visibility = level >= 2 ? Visibility.Visible : Visibility.Collapsed;
+
+        // Dropping back to Normal/Advanced while Custom was selected shouldn't leave an
+        // invisible radio checked with its panel hidden — fall back to Normal cleanly.
+        if (level < 1 && CustomModeRadio.IsChecked == true)
+            NormalModeRadio.IsChecked = true;
+
+        ApplyAdvancedCheckboxAvailability();
+
+        if (level >= 2 && ProcessComboBox.Items.Count == 0)
+            RefreshProcessList();
+        if (level >= 2 && FocusKeepListBox.Items.Count == 0)
+            PopulateFocusList();
     }
 
     // ----- Memory composition bar -----
@@ -135,7 +183,7 @@ public partial class MainWindow : FluentWindow
         var current = ProcessTrimmer.GetTopProcessesByMemory(count: 15);
         _leakTracker.RecordSample(current);
 
-        if (ExperimentalModeRadio.IsChecked != true) return;
+        if (UiModeComboBox.SelectedIndex < 2) return;
 
         var suspects = _leakTracker.GetSuspects(current);
         LeakSuspectsText.Text = suspects.Count == 0
@@ -144,12 +192,71 @@ public partial class MainWindow : FluentWindow
               ". Not a diagnosis — just worth a look.";
     }
 
+    // ----- Focus Mode (Experimental) -----
+
+    private void PopulateFocusList()
+    {
+        FocusKeepListBox.Items.Clear();
+
+        foreach (var proc in ProcessTrimmer.GetAllProcessesSortedByName())
+        {
+            var item = new System.Windows.Controls.ListBoxItem
+            {
+                Content = $"{proc.Name} ({proc.WorkingSetMB:F0} MB)",
+                Tag = proc.Name,
+                IsSelected = _settings.FocusMode.KeepProcessNames.Contains(proc.Name, StringComparer.OrdinalIgnoreCase)
+            };
+            FocusKeepListBox.Items.Add(item);
+        }
+    }
+
+    private void RefreshFocusListButton_Click(object sender, RoutedEventArgs e) => PopulateFocusList();
+
+    private void FocusModeToggleButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_focusModeController.IsRunning)
+        {
+            _focusModeController.Stop();
+            FocusModeToggleButton.Content = "Start Focus Mode";
+            FocusModeToggleButton.Appearance = Wpf.Ui.Controls.ControlAppearance.Primary;
+            FocusModeStatusText.Text = "Focus Mode stopped.";
+            return;
+        }
+
+        var keepNames = FocusKeepListBox.Items
+            .Cast<System.Windows.Controls.ListBoxItem>()
+            .Where(i => i.IsSelected)
+            .Select(i => (string)i.Tag)
+            .ToList();
+
+        if (keepNames.Count == 0)
+        {
+            FocusModeStatusText.Text = "Select at least one app to protect first.";
+            return;
+        }
+
+        _settings.FocusMode.KeepProcessNames = keepNames;
+        SettingsStore.Save(_settings);
+
+        _focusModeController.Start();
+        FocusModeToggleButton.Content = "Stop Focus Mode";
+        FocusModeToggleButton.Appearance = Wpf.Ui.Controls.ControlAppearance.Danger;
+        FocusModeStatusText.Text = $"Focus Mode running \u2014 protecting: {string.Join(", ", keepNames)}. Trimming everything else every {_settings.FocusMode.IntervalSeconds}s.";
+    }
+
+    private void OnFocusModeTick(RamSavior.Core.Automation.FocusModeTickResult result)
+    {
+        RefreshStatus();
+        FocusModeStatusText.Text =
+            $"Trimmed {result.ProcessesTrimmed} other process(es), freed {result.SystemCleanResult.FreedGB:F2} GB system-wide. " +
+            $"Still protecting: {string.Join(", ", _settings.FocusMode.KeepProcessNames)}.";
+    }
+
     // ----- Automation quick card -----
 
     private void RefreshAutomationSummary()
     {
         AutomationQuickToggle.IsChecked = _settings.Automation.Enabled;
-        AutomationStatusText.Text = _settings.Automation.Enabled ? "On" : "Off";
 
         var parts = new List<string>();
         if (_settings.Automation.IntervalEnabled)
@@ -193,24 +300,9 @@ public partial class MainWindow : FluentWindow
         historyWindow.ShowDialog();
     }
 
-    // ----- Tier gating (Advanced/Experimental require opt-in from Settings) -----
+    // ----- Advanced checkbox availability (driven by the top Mode selector now) -----
 
-    private void ApplyTierGating()
-    {
-        AdvancedModeRadio.IsEnabled = _settings.EnableAdvancedCleaning;
-        AdvancedModeRadio.ToolTip = _settings.EnableAdvancedCleaning ? null : "Enable Advanced Cleaning in Settings to use this tier.";
-
-        ExperimentalModeRadio.IsEnabled = _settings.EnableExperimentalFeatures;
-        ExperimentalModeRadio.ToolTip = _settings.EnableExperimentalFeatures ? null : "Enable Experimental Features in Settings to use this tier.";
-
-        if (AdvancedModeRadio.IsChecked == true && !_settings.EnableAdvancedCleaning) NormalModeRadio.IsChecked = true;
-        if (ExperimentalModeRadio.IsChecked == true && !_settings.EnableExperimentalFeatures) NormalModeRadio.IsChecked = true;
-
-        ApplyAdvancedGating();
-        ApplyExperimentalVisibility();
-    }
-
-    private void ApplyAdvancedGating()
+    private void ApplyAdvancedCheckboxAvailability()
     {
         foreach (var info in MemoryCommandCatalog.All)
         {
@@ -222,21 +314,8 @@ public partial class MainWindow : FluentWindow
             checkBox.IsEnabled = _settings.EnableAdvancedCleaning;
             if (!_settings.EnableAdvancedCleaning) checkBox.IsChecked = false;
 
-            checkBox.ToolTip = _settings.EnableAdvancedCleaning
-                ? null
-                : "Enable Advanced Cleaning in Settings to use this option.";
-
             container.Opacity = _settings.EnableAdvancedCleaning ? 1.0 : 0.5;
         }
-    }
-
-    private void ApplyExperimentalVisibility()
-    {
-        bool show = _settings.EnableExperimentalFeatures && ExperimentalModeRadio.IsChecked == true;
-        ExperimentalSection.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-
-        if (show && ProcessComboBox.Items.Count == 0)
-            RefreshProcessList();
     }
 
     private void RefreshProcessList()
@@ -334,14 +413,10 @@ public partial class MainWindow : FluentWindow
         }
     }
 
-    private void ModeRadio_Checked(object sender, RoutedEventArgs e)
+    private void CleanTierRadio_Checked(object sender, RoutedEventArgs e)
     {
         if (CustomPanel is null) return;
-
-        bool isCustomStyleTier = AdvancedModeRadio.IsChecked == true || ExperimentalModeRadio.IsChecked == true;
-        CustomPanel.Visibility = isCustomStyleTier ? Visibility.Visible : Visibility.Collapsed;
-
-        ApplyExperimentalVisibility();
+        CustomPanel.Visibility = CustomModeRadio.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
@@ -353,9 +428,7 @@ public partial class MainWindow : FluentWindow
 
     private void WireSettingsCallbacks(SettingsWindow settingsWindow)
     {
-        settingsWindow.AdvancedCleaningChanged = () => { ApplyTierGating(); };
         settingsWindow.CompactModeChanged = () => { ApplyCompactMode(); ReflowWindowSize(); };
-        settingsWindow.ExperimentalFeaturesChanged = () => { ApplyTierGating(); ReflowWindowSize(); };
         settingsWindow.AutomationChanged = () =>
         {
             RefreshAutomationSummary();
@@ -381,7 +454,7 @@ public partial class MainWindow : FluentWindow
 
     private void CleanButton_Click(object sender, RoutedEventArgs e)
     {
-        bool isCustomTier = AdvancedModeRadio.IsChecked == true || ExperimentalModeRadio.IsChecked == true;
+        bool isCustomTier = CustomModeRadio.IsChecked == true;
         System.Collections.Generic.HashSet<MemoryListCommand>? selected = null;
 
         if (isCustomTier)

@@ -32,6 +32,8 @@
             <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,20"
                        Text="Automation only ever runs Normal or Moderate — Advanced and Experimental actions always require you to trigger them yourself."/>
 
+            <CheckBox x:Name="DontShowAgainCheckBox" Content="Don't show this again on startup" IsChecked="True" Margin="0,0,0,12"/>
+
             <ui:Button Content="Got it, let's go" Appearance="Primary" Height="40" Click="GotItButton_Click"/>
         </StackPanel>
     </Grid>

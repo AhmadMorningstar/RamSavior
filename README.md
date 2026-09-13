@@ -135,16 +135,36 @@ and **check "Run with highest privileges"** — without that, you'll hit exit co
   published folders) — Danger Zone reset covers the "clean slate" need without pretending
   to be a real uninstaller.
 
-## 11. Known things to double check before you rely on this
+## 12. This round: Focus Mode + full wide-layout redesign
 
-- **`SYSTEM_MEMORY_LIST_INFORMATION` struct layout** (used for composition + standby
-  threshold) is verified against Process Hacker's `phnt`, x64-only, and used only in a
-  QUERY call — safe risk profile even if a field were off, but flagging since it's
-  still technically undocumented by Microsoft.
-- **`schtasks.exe` argument quoting** for paths with spaces was written carefully but
-  not tested on a real Windows box — if `schedule install` or the Start-with-Windows
-  toggle errors, paste me the exact error text.
-- Everything from prior rounds still applies (package version pins, WPF-UI icon/type
-  ambiguity risks, x64-only assumptions). I have still not compiled this on a live
-  Windows machine — same standing offer: paste any build error back and I'll fix it in
-  the same turn.
+- **Focus Mode (Experimental)**: pick apps to protect from a multi-select list (e.g.
+  `brave`, `worldoftanks`), hit Start, and everything else gets trimmed via the same
+  documented `EmptyWorkingSet` API on a repeating timer, plus a system-wide Normal
+  clean each cycle to actually reclaim what was freed. Matching is by process NAME, not
+  PID, so multi-process apps (most browsers) are protected in full. A short built-in
+  list of core OS process names (`System`, `csrss`, `lsass`, `winlogon`, `dwm`, etc.)
+  is always skipped as a courtesy — not because trimming them is dangerous, just
+  pointless/usually-denied anyway.
+- **Full UI redesign**: wide layout (880px) with a persistent left column (status +
+  automation) and a right column that changes shape based on a new top-level **Mode**
+  dropdown — Normal shows just the two safe tier radios; Advanced adds the Custom
+  checkbox picker; Experimental adds Focus Mode, per-process trim, and leak detection.
+  This dropdown now directly drives what were previously two separate Settings
+  checkboxes (`EnableAdvancedCleaning`/`EnableExperimentalFeatures`) — those checkboxes
+  were removed from Settings to avoid two controls fighting over the same state.
+- **Welcome screen** now has a "Don't show this again" checkbox (checked by default).
+
+## 13. Known things to double check
+
+- **`ControlAppearance.Primary`/`.Danger`** are set programmatically on the Focus Mode
+  button (toggling color when running/stopped) — same category of guess as the Reset
+  button's `Appearance="Danger"` in XAML from the prior round. If either throws, it's a
+  WPF-UI enum/property naming mismatch for your installed version — check IntelliSense
+  on `Wpf.Ui.Controls.ControlAppearance`.
+- I caught and fixed the recurring `Brushes`/`Color` ambiguity bug (from
+  `UseWindowsForms`) in the rewritten `MainWindow.xaml.cs` before zipping — worth
+  knowing this class of bug can resurface any time a file with both usings gets
+  rewritten from scratch, since it's not something the compiler warns about until you
+  actually build.
+- Everything from prior rounds still applies. Same standing offer: paste any build
+  error back and I'll fix it in the same turn.

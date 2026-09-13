@@ -3,8 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="RAM Savior"
-        Width="460"
-        MinHeight="360" MinWidth="400"
+        Width="880"
+        MinHeight="420" MinWidth="760"
         WindowBackdropType="Mica"
         ExtendsContentIntoTitleBar="True"
         WindowStartupLocation="CenterScreen"
@@ -16,17 +16,28 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <ui:TitleBar Title="RAM Savior" Grid.Row="0" />
+        <ui:TitleBar Title="RAM Savior" Grid.Row="0"/>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-        <StackPanel x:Name="RootContent" Margin="24,12,24,24" VerticalAlignment="Top">
+        <StackPanel x:Name="RootContent" Margin="24,12,24,24">
 
-            <Grid Margin="0,0,0,8">
+            <!-- Header: Mode selector + History/Settings -->
+            <Grid Margin="0,0,0,16">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Memory Status" FontSize="14" FontWeight="SemiBold" Opacity="0.7" VerticalAlignment="Center"/>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <TextBlock Text="Mode" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,10,0"/>
+                    <ComboBox x:Name="UiModeComboBox" Width="160" SelectionChanged="UiModeComboBox_SelectionChanged">
+                        <ComboBoxItem Content="Normal"/>
+                        <ComboBoxItem Content="Advanced"/>
+                        <ComboBoxItem Content="Experimental"/>
+                    </ComboBox>
+                    <TextBlock x:Name="ModeDescriptionText" VerticalAlignment="Center" Margin="12,0,0,0" Opacity="0.6" FontSize="11"/>
+                </StackPanel>
+
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                     <ui:Button x:Name="HistoryButton"
                                Icon="{ui:SymbolIcon Symbol=Options24}"
@@ -34,7 +45,7 @@
                                Width="32" Height="32" Padding="0" Margin="0,0,6,0"
                                ToolTip="History"
                                Click="HistoryButton_Click"/>
-                    <ui:Button Grid.Column="1" x:Name="SettingsButton"
+                    <ui:Button x:Name="SettingsButton"
                                Icon="{ui:SymbolIcon Symbol=Settings24}"
                                Appearance="Secondary"
                                Width="32" Height="32" Padding="0"
@@ -42,114 +53,156 @@
                 </StackPanel>
             </Grid>
 
-            <ui:CardExpander IsExpanded="True" Margin="0,0,0,16">
-                <StackPanel Margin="4">
-                    <TextBlock x:Name="AvailableText" Text="-- GB available" FontSize="28" FontWeight="Bold"/>
-                    <TextBlock x:Name="TotalText" Text="of -- GB total" Opacity="0.6" Margin="0,0,0,12"/>
-                    <ProgressBar x:Name="LoadBar" Minimum="0" Maximum="100" Value="0" Height="8"/>
-                    <TextBlock x:Name="LoadPercentText" Text="0% memory load" Margin="0,4,0,12" Opacity="0.6"/>
-
-                    <TextBlock Text="Composition" FontSize="11" FontWeight="SemiBold" Opacity="0.6" Margin="0,0,0,4"/>
-                    <Border CornerRadius="4" Height="14" ClipToBounds="True">
-                        <Grid x:Name="CompositionBar"/>
-                    </Border>
-                    <TextBlock x:Name="CompositionLegendText" Margin="0,6,0,0" FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
-                </StackPanel>
-            </ui:CardExpander>
-
-            <Grid Margin="0,0,0,8">
+            <!-- Wide two-column body: status/automation on the left, clean actions on the right -->
+            <Grid>
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="300"/>
+                    <ColumnDefinition Width="24"/>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Automation" FontSize="14" FontWeight="SemiBold" Opacity="0.7" VerticalAlignment="Center"/>
-                <TextBlock Grid.Column="1" x:Name="AutomationStatusText" Text="Off" FontSize="11" Opacity="0.6" VerticalAlignment="Center"/>
-            </Grid>
 
-            <ui:CardControl Margin="0,0,0,16">
-                <StackPanel>
-                    <CheckBox x:Name="AutomationQuickToggle" Content="Clean automatically in the background" Checked="AutomationQuickToggle_Changed" Unchecked="AutomationQuickToggle_Changed"/>
-                    <TextBlock x:Name="AutomationSummaryText" Margin="0,4,0,8" FontSize="11" Opacity="0.6" TextWrapping="Wrap"/>
-                    <ui:Button Content="Configure Automation" Appearance="Secondary" HorizontalAlignment="Left" Click="ConfigureAutomationButton_Click"/>
+                <!-- LEFT: status, always visible regardless of mode -->
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Memory Status" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+
+                    <ui:CardExpander IsExpanded="True" Margin="0,0,0,16">
+                        <StackPanel Margin="4">
+                            <TextBlock x:Name="AvailableText" Text="-- GB available" FontSize="26" FontWeight="Bold"/>
+                            <TextBlock x:Name="TotalText" Text="of -- GB total" Opacity="0.6" Margin="0,0,0,12"/>
+                            <ProgressBar x:Name="LoadBar" Minimum="0" Maximum="100" Value="0" Height="8"/>
+                            <TextBlock x:Name="LoadPercentText" Text="0% memory load" Margin="0,4,0,12" Opacity="0.6"/>
+
+                            <TextBlock Text="Composition" FontSize="11" FontWeight="SemiBold" Opacity="0.6" Margin="0,0,0,4"/>
+                            <Border CornerRadius="4" Height="14" ClipToBounds="True">
+                                <Grid x:Name="CompositionBar"/>
+                            </Border>
+                            <TextBlock x:Name="CompositionLegendText" Margin="0,6,0,0" FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </ui:CardExpander>
+
+                    <TextBlock Text="Automation" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+
+                    <ui:CardControl Margin="0,0,0,16">
+                        <StackPanel>
+                            <CheckBox x:Name="AutomationQuickToggle" Content="Clean automatically" Checked="AutomationQuickToggle_Changed" Unchecked="AutomationQuickToggle_Changed"/>
+                            <TextBlock x:Name="AutomationSummaryText" Margin="0,4,0,8" FontSize="11" Opacity="0.6" TextWrapping="Wrap"/>
+                            <ui:Button Content="Configure" Appearance="Secondary" HorizontalAlignment="Left" Click="ConfigureAutomationButton_Click"/>
+                        </StackPanel>
+                    </ui:CardControl>
                 </StackPanel>
-            </ui:CardControl>
 
-            <TextBlock Text="Clean Mode" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+                <!-- RIGHT: everything that changes shape based on the selected Mode -->
+                <StackPanel Grid.Column="2">
 
-            <ui:CardControl Margin="0,0,0,8" Icon="{ui:SymbolIcon Symbol=Options24}">
-                <StackPanel>
-                    <RadioButton x:Name="NormalModeRadio" Content="Normal (recommended)" IsChecked="True" GroupName="Mode" Checked="ModeRadio_Checked"/>
-                    <TextBlock Text="Targets low-reuse standby cache only. Minimal disk-reload risk. Safe default for automation." Opacity="0.6" FontSize="11" Margin="20,2,0,6" TextWrapping="Wrap"/>
+                    <TextBlock Text="Clean" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
 
-                    <RadioButton x:Name="ModerateModeRadio" Content="Moderate" GroupName="Mode" Checked="ModeRadio_Checked"/>
-                    <TextBlock Text="Also flushes working sets for a bit more freed memory. Still low risk." Opacity="0.6" FontSize="11" Margin="20,2,0,6" TextWrapping="Wrap"/>
+                    <ui:CardControl Margin="0,0,0,8" Icon="{ui:SymbolIcon Symbol=Options24}">
+                        <StackPanel>
+                            <RadioButton x:Name="NormalModeRadio" Content="Normal (recommended)" IsChecked="True" GroupName="CleanTier" Checked="CleanTierRadio_Checked"/>
+                            <TextBlock Text="Targets low-reuse standby cache only. Minimal disk-reload risk. Safe default for automation." Opacity="0.6" FontSize="11" Margin="20,2,0,6" TextWrapping="Wrap"/>
 
-                    <RadioButton x:Name="AdvancedModeRadio" Content="Advanced" GroupName="Mode" Checked="ModeRadio_Checked"/>
-                    <TextBlock Text="Pick exactly which cleanup actions to run, including options that may briefly affect responsiveness." Opacity="0.6" FontSize="11" Margin="20,2,0,6" TextWrapping="Wrap"/>
+                            <RadioButton x:Name="ModerateModeRadio" Content="Moderate" GroupName="CleanTier" Checked="CleanTierRadio_Checked"/>
+                            <TextBlock Text="Also flushes working sets for a bit more freed memory. Still low risk." Opacity="0.6" FontSize="11" Margin="20,2,0,0" TextWrapping="Wrap"/>
 
-                    <RadioButton x:Name="ExperimentalModeRadio" Content="Experimental" GroupName="Mode" Checked="ModeRadio_Checked"/>
-                    <TextBlock Text="Everything in Advanced, plus per-process memory trimming." Opacity="0.6" FontSize="11" Margin="20,2,0,0" TextWrapping="Wrap"/>
-                </StackPanel>
-            </ui:CardControl>
+                            <StackPanel x:Name="CustomTierOption" Visibility="Collapsed">
+                                <RadioButton x:Name="CustomModeRadio" Content="Custom — pick exactly" GroupName="CleanTier" Margin="0,6,0,0" Checked="CleanTierRadio_Checked"/>
+                                <TextBlock Text="Pick exactly which cleanup actions run, including options that may briefly affect responsiveness." Opacity="0.6" FontSize="11" Margin="20,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </ui:CardControl>
 
-            <ui:CardExpander x:Name="CustomPanel" IsExpanded="True" Visibility="Collapsed" Margin="0,0,0,8">
-                <StackPanel x:Name="CustomItemsPanel" Margin="4"/>
-            </ui:CardExpander>
+                    <ui:CardExpander x:Name="CustomPanel" IsExpanded="True" Visibility="Collapsed" Margin="0,0,0,8">
+                        <StackPanel x:Name="CustomItemsPanel" Margin="4"/>
+                    </ui:CardExpander>
 
-            <CheckBox x:Name="DryRunCheckBox" Content="Dry run (show what would happen, change nothing)" Margin="0,0,0,4"/>
+                    <CheckBox x:Name="DryRunCheckBox" Content="Dry run (show what would happen, change nothing)" Margin="0,4,0,4"/>
 
-            <ui:Button x:Name="CleanButton"
-                       Content="Purge Memory Now"
-                       Appearance="Primary"
-                       Icon="{ui:SymbolIcon Symbol=Broom24}"
-                       Height="44"
-                       FontWeight="SemiBold"
-                       Margin="0,4,0,0"
-                       Click="CleanButton_Click"/>
+                    <ui:Button x:Name="CleanButton"
+                               Content="Purge Memory Now"
+                               Appearance="Primary"
+                               Icon="{ui:SymbolIcon Symbol=Broom24}"
+                               Height="44"
+                               FontWeight="SemiBold"
+                               Margin="0,4,0,0"
+                               Click="CleanButton_Click"/>
 
-            <TextBlock x:Name="ResultText" Margin="0,12,0,0" TextWrapping="Wrap" Opacity="0.8"/>
+                    <TextBlock x:Name="ResultText" Margin="0,12,0,0" TextWrapping="Wrap" Opacity="0.8"/>
 
-            <StackPanel x:Name="ExperimentalSection" Visibility="Collapsed" Margin="0,20,0,0">
-                <Grid Margin="0,0,0,8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="Experimental" FontSize="14" FontWeight="SemiBold" Opacity="0.7" VerticalAlignment="Center"/>
-                    <Border Grid.Column="1" Background="#E5484D" CornerRadius="4" Padding="6,1,6,1">
-                        <TextBlock Text="EXPERIMENTAL" FontSize="9" FontWeight="Bold" Foreground="White"/>
-                    </Border>
-                </Grid>
+                    <!-- Experimental-only content -->
+                    <StackPanel x:Name="ExperimentalArea" Visibility="Collapsed" Margin="0,24,0,0">
 
-                <ui:CardExpander IsExpanded="True">
-                    <StackPanel Margin="4">
-                        <TextBlock Text="Trim a specific process" FontWeight="SemiBold" Margin="0,0,0,2"/>
-                        <TextBlock Text="Uses the official Windows EmptyWorkingSet API on one chosen app instead of purging system-wide." Opacity="0.6" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"/>
-
-                        <Grid>
+                        <Grid Margin="0,0,0,8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <ComboBox Grid.Column="0" x:Name="ProcessComboBox" Margin="0,0,8,0"/>
-                            <ui:Button Grid.Column="1" x:Name="RefreshProcessesButton"
-                                       Icon="{ui:SymbolIcon Symbol=ArrowSync24}"
-                                       Appearance="Secondary" Width="36" Height="36" Padding="0"
-                                       Click="RefreshProcessesButton_Click"/>
+                            <TextBlock Grid.Column="0" Text="Focus Mode" FontSize="14" FontWeight="SemiBold" Opacity="0.7" VerticalAlignment="Center"/>
+                            <Border Grid.Column="1" Background="#E5484D" CornerRadius="4" Padding="6,1,6,1">
+                                <TextBlock Text="EXPERIMENTAL" FontSize="9" FontWeight="Bold" Foreground="White"/>
+                            </Border>
                         </Grid>
 
-                        <ui:Button x:Name="TrimProcessButton"
-                                   Content="Trim Selected Process"
-                                   Appearance="Secondary"
-                                   Height="36"
-                                   Margin="0,10,0,0"
-                                   Click="TrimProcessButton_Click"/>
+                        <ui:CardExpander IsExpanded="True" Margin="0,0,0,20">
+                            <StackPanel Margin="4">
+                                <TextBlock Text="Pick apps to protect — everything else gets trimmed repeatedly while this runs." FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,10"/>
 
-                        <TextBlock x:Name="ExperimentalResultText" Margin="0,8,0,0" FontSize="11" TextWrapping="Wrap" Opacity="0.8"/>
-                        <TextBlock x:Name="LeakSuspectsText" Margin="0,8,0,0" FontSize="11" TextWrapping="Wrap" Opacity="0.8" Foreground="#E5A21A"/>
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ListBox Grid.Column="0" x:Name="FocusKeepListBox" Height="160" SelectionMode="Extended" Margin="0,0,8,0"/>
+                                    <ui:Button Grid.Column="1" Icon="{ui:SymbolIcon Symbol=ArrowSync24}" Appearance="Secondary" Width="36" Height="36" Padding="0" VerticalAlignment="Top" Click="RefreshFocusListButton_Click"/>
+                                </Grid>
+
+                                <ui:Button x:Name="FocusModeToggleButton" Content="Start Focus Mode" Appearance="Primary" Height="40" Click="FocusModeToggleButton_Click"/>
+                                <TextBlock x:Name="FocusModeStatusText" Margin="0,8,0,0" FontSize="11" Opacity="0.8" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </ui:CardExpander>
+
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Per-Process Trim" FontSize="14" FontWeight="SemiBold" Opacity="0.7" VerticalAlignment="Center"/>
+                            <Border Grid.Column="1" Background="#E5484D" CornerRadius="4" Padding="6,1,6,1">
+                                <TextBlock Text="EXPERIMENTAL" FontSize="9" FontWeight="Bold" Foreground="White"/>
+                            </Border>
+                        </Grid>
+
+                        <ui:CardExpander IsExpanded="True">
+                            <StackPanel Margin="4">
+                                <TextBlock Text="Trim a specific process" FontWeight="SemiBold" Margin="0,0,0,2"/>
+                                <TextBlock Text="Uses the official Windows EmptyWorkingSet API on one chosen app instead of purging system-wide." Opacity="0.6" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ComboBox Grid.Column="0" x:Name="ProcessComboBox" Margin="0,0,8,0"/>
+                                    <ui:Button Grid.Column="1" x:Name="RefreshProcessesButton"
+                                               Icon="{ui:SymbolIcon Symbol=ArrowSync24}"
+                                               Appearance="Secondary" Width="36" Height="36" Padding="0"
+                                               Click="RefreshProcessesButton_Click"/>
+                                </Grid>
+
+                                <ui:Button x:Name="TrimProcessButton"
+                                           Content="Trim Selected Process"
+                                           Appearance="Secondary"
+                                           Height="36"
+                                           Margin="0,10,0,0"
+                                           Click="TrimProcessButton_Click"/>
+
+                                <TextBlock x:Name="ExperimentalResultText" Margin="0,8,0,0" FontSize="11" TextWrapping="Wrap" Opacity="0.8"/>
+                                <TextBlock x:Name="LeakSuspectsText" Margin="0,8,0,0" FontSize="11" TextWrapping="Wrap" Opacity="0.8" Foreground="#E5A21A"/>
+                            </StackPanel>
+                        </ui:CardExpander>
                     </StackPanel>
-                </ui:CardExpander>
-            </StackPanel>
+
+                </StackPanel>
+            </Grid>
 
         </StackPanel>
         </ScrollViewer>

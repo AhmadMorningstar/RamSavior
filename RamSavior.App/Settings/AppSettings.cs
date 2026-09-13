@@ -58,4 +58,17 @@ public class AppSettings
 
     /// <summary>Fixed at Ctrl+Alt+R for now — no key-capture UI yet, see project notes.</summary>
     public bool GlobalHotkeyEnabled { get; set; } = false;
+
+    /// <summary>
+    /// Focus Mode's keep-list persists between launches for convenience, but the running
+    /// state itself does not — Focus Mode always starts stopped, since it's meant to be a
+    /// deliberate, attended session, not something that silently resumes in the background.
+    /// </summary>
+    public FocusModeSettings FocusMode { get; set; } = new();
+}
+
+public class FocusModeSettings
+{
+    public List<string> KeepProcessNames { get; set; } = new();
+    public int IntervalSeconds { get; set; } = 20;
 }

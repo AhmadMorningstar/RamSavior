@@ -68,7 +68,7 @@ public partial class App : System.Windows.Application
         {
             var welcome = new WelcomeWindow { Owner = _mainWindow };
             welcome.ShowDialog();
-            _settings.HasSeenWelcome = true;
+            _settings.HasSeenWelcome = welcome.DontShowAgain;
             SettingsStore.Save(_settings);
         }
     }
