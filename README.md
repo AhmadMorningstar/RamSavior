@@ -154,17 +154,46 @@ and **check "Run with highest privileges"** — without that, you'll hit exit co
   were removed from Settings to avoid two controls fighting over the same state.
 - **Welcome screen** now has a "Don't show this again" checkbox (checked by default).
 
-## 13. Known things to double check
+## 14. This round: three real bugs + Focus Mode/Insights overhaul
 
-- **`ControlAppearance.Primary`/`.Danger`** are set programmatically on the Focus Mode
-  button (toggling color when running/stopped) — same category of guess as the Reset
-  button's `Appearance="Danger"` in XAML from the prior round. If either throws, it's a
-  WPF-UI enum/property naming mismatch for your installed version — check IntelliSense
-  on `Wpf.Ui.Controls.ControlAppearance`.
-- I caught and fixed the recurring `Brushes`/`Color` ambiguity bug (from
-  `UseWindowsForms`) in the rewritten `MainWindow.xaml.cs` before zipping — worth
-  knowing this class of bug can resurface any time a file with both usings gets
-  rewritten from scratch, since it's not something the compiler warns about until you
-  actually build.
+- **Fixed: right-aligned Clean Mode radios.** `ui:CardControl`'s content wasn't
+  stretching the way I assumed (no source access to know exactly why). Rather than
+  guess at its template again, `MainWindow` no longer uses `CardControl`/`CardExpander`
+  at all — every section is now a plain `Border` + `Grid`/`StackPanel` I fully control,
+  which guarantees correct stretching regardless of WPF-UI's internal behavior. This
+  also removes the unused collapse-chevrons that were taking up space for no reason.
+- **Fixed: window shrinking to half-screen on Mode change.** The old `ReflowWindowSize()`
+  called `SizeToContent` on every Mode/Compact-mode change — forcing that on a maximized
+  window knocks it out of the maximized state, which is exactly the "shrinks for no
+  reason" bug. The auto-fit-to-content logic now runs exactly once, on first launch, and
+  only if the window starts in `WindowState.Normal`. After that, the window size is
+  entirely yours — resizing it is on you, not automatic.
+- **Wide layout, real columns.** Default width is now 1100px. Left column (status +
+  Insights + automation) stays constant; middle column is Clean actions; a genuine
+  fourth column appears for Experimental content instead of stacking it below and
+  forcing a scroll — it only claims space when Experimental mode is selected.
+- **New: Insights card** under Memory Status with three tabs — **Status** (top 3
+  memory users right now), **History** (last 5 cleans, condensed), **Last Cleaned**
+  (the single most recent result, prominent). Refreshes live on the Status tab; History/
+  Last Cleaned refresh after any clean or on tab click.
+- **Focus Mode's picker overhauled**: a search box filters the list without losing
+  selections on filtered-out items; **Add Folder...** scans every `.exe` directly inside
+  a chosen folder (top-level only, not recursive, to avoid accidentally sweeping in
+  thousands of unrelated files from something like a Program Files root) and adds them
+  pre-selected; **Add File...** adds one specific `.exe`. Both feed into the same
+  dedicated list rather than a separate mechanism — an app you add by folder/file
+  doesn't need to be running yet; Focus Mode will honor it by name once it does.
+
+## 15. Known things to double check
+
+- **Same `ControlAppearance` guess as before**, now used more (Focus Mode button,
+  Insights tab buttons). If tab-switching or the Focus Mode button's color-swap throws,
+  it's this enum/property naming again.
+- **`FolderBrowserDialog`/`OpenFileDialog`** are fully-qualified inline
+  (`System.Windows.Forms.FolderBrowserDialog`, `Microsoft.Win32.OpenFileDialog`) rather
+  than via `using` statements, specifically to avoid re-triggering the `Brushes`/`Color`
+  ambiguity bug in this same file. Ran the full sweep before zipping — clean.
+- Folder scanning is **top-level only** by design (see above) — if you want recursive,
+  say so and I'll add it as an option rather than change the default.
 - Everything from prior rounds still applies. Same standing offer: paste any build
   error back and I'll fix it in the same turn.

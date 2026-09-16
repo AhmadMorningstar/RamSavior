@@ -21,6 +21,11 @@ public partial class MainWindow : FluentWindow
     private readonly Dictionary<MemoryListCommand, StackPanel> _customRowContainers = new();
     private readonly ProcessMemoryTracker _leakTracker = new();
     private readonly FocusModeController _focusModeController;
+
+    private readonly List<string> _focusPickerNames = new();
+    private readonly HashSet<string> _focusSelectedNames = new(StringComparer.OrdinalIgnoreCase);
+
+    private string _insightsTab = "Status";
     private bool _isLoaded;
 
     public MainWindow(AppSettings settings)
@@ -37,15 +42,13 @@ public partial class MainWindow : FluentWindow
         UiModeComboBox.SelectedIndex = _settings.EnableExperimentalFeatures ? 2 : _settings.EnableAdvancedCleaning ? 1 : 0;
         ApplyUiMode();
         RefreshAutomationSummary();
+        RefreshInsights();
         _isLoaded = true;
 
         _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         _pollTimer.Tick += (_, _) => RefreshStatus();
         _pollTimer.Start();
 
-        // Leak-trend sampling runs much slower than the status poll — it needs several
-        // samples over minutes to mean anything, and scanning every running process is
-        // heavier than reading two memory counters.
         _leakScanTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(60) };
         _leakScanTimer.Tick += (_, _) => RunLeakScan();
         _leakScanTimer.Start();
@@ -60,25 +63,21 @@ public partial class MainWindow : FluentWindow
     public void NotifyAutomationRanInBackground(CleanupResult result)
     {
         RefreshStatus();
+        RefreshInsights();
         ResultText.Text = result.Success
             ? $"Automation freed {result.FreedGB:F2} GB in the background just now."
             : $"Automation attempt failed: {result.Error}";
     }
 
-    // ----- Sizing -----
+    // ----- Sizing: auto-fit ONCE on first show, then the user owns the window size.
+    // Previously this also ran on every Mode/Compact change, which is exactly what caused
+    // the "shrinks to half the screen" bug — forcing SizeToContent on a maximized window
+    // knocks it out of the maximized state. Now it never runs again after first launch. -----
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        SizeToContent = SizeToContent.Height;
-        Dispatcher.BeginInvoke(new Action(() =>
-        {
-            SizeToContent = SizeToContent.Manual;
-            Height = Math.Min(ActualHeight, SystemParameters.WorkArea.Height - 40);
-        }), DispatcherPriority.ContextIdle);
-    }
+        if (WindowState != WindowState.Normal) return; // don't fight a maximized/minimized start state
 
-    private void ReflowWindowSize()
-    {
         SizeToContent = SizeToContent.Height;
         Dispatcher.BeginInvoke(new Action(() =>
         {
@@ -93,7 +92,7 @@ public partial class MainWindow : FluentWindow
         RootContent.LayoutTransform = new ScaleTransform(scale, scale);
     }
 
-    // ----- Top-level Mode selector: this is what makes the UI "completely change" -----
+    // ----- Top-level Mode selector -----
 
     private void UiModeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -104,7 +103,7 @@ public partial class MainWindow : FluentWindow
         SettingsStore.Save(_settings);
 
         ApplyUiMode();
-        ReflowWindowSize();
+        // Deliberately NOT resizing the window here — see the note on Window_Loaded above.
     }
 
     private void ApplyUiMode()
@@ -119,19 +118,95 @@ public partial class MainWindow : FluentWindow
         };
 
         CustomTierOption.Visibility = level >= 1 ? Visibility.Visible : Visibility.Collapsed;
-        ExperimentalArea.Visibility = level >= 2 ? Visibility.Visible : Visibility.Collapsed;
 
-        // Dropping back to Normal/Advanced while Custom was selected shouldn't leave an
-        // invisible radio checked with its panel hidden — fall back to Normal cleanly.
+        bool showExperimental = level >= 2;
+        ExperimentalArea.Visibility = showExperimental ? Visibility.Visible : Visibility.Collapsed;
+        ExperimentalGutterColumn.Width = showExperimental ? new GridLength(24) : new GridLength(0);
+        ExperimentalColumn.Width = showExperimental ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+
         if (level < 1 && CustomModeRadio.IsChecked == true)
             NormalModeRadio.IsChecked = true;
 
         ApplyAdvancedCheckboxAvailability();
 
-        if (level >= 2 && ProcessComboBox.Items.Count == 0)
+        if (showExperimental && ProcessComboBox.Items.Count == 0)
             RefreshProcessList();
-        if (level >= 2 && FocusKeepListBox.Items.Count == 0)
+        if (showExperimental && _focusPickerNames.Count == 0)
             PopulateFocusList();
+    }
+
+    // ----- Insights (Status / History / Last Cleaned) -----
+
+    private void InsightsTab_Click(object sender, RoutedEventArgs e)
+    {
+        _insightsTab = sender switch
+        {
+            _ when ReferenceEquals(sender, InsightsHistoryTabButton) => "History",
+            _ when ReferenceEquals(sender, InsightsLastCleanedTabButton) => "LastCleaned",
+            _ => "Status"
+        };
+
+        InsightsStatusTabButton.Appearance = _insightsTab == "Status" ? ControlAppearance.Primary : ControlAppearance.Secondary;
+        InsightsHistoryTabButton.Appearance = _insightsTab == "History" ? ControlAppearance.Primary : ControlAppearance.Secondary;
+        InsightsLastCleanedTabButton.Appearance = _insightsTab == "LastCleaned" ? ControlAppearance.Primary : ControlAppearance.Secondary;
+
+        RefreshInsights();
+    }
+
+    private void RefreshInsights()
+    {
+        InsightsContentPanel.Children.Clear();
+
+        switch (_insightsTab)
+        {
+            case "History":
+                var recent = JsonLogger.ReadRecent(SettingsStore.HistoryLogPath, 5);
+                if (recent.Count == 0)
+                {
+                    AddInsightsLine("No cleaning history yet.", 0.6);
+                    break;
+                }
+                foreach (var entry in recent)
+                {
+                    string time = DateTimeOffset.TryParse(entry.Timestamp, out var dto) ? dto.ToLocalTime().ToString("MMM d, h:mm tt") : entry.Timestamp;
+                    AddInsightsLine($"{time} \u2014 {entry.Mode} ({entry.Source})", 0.9, bold: true);
+                    AddInsightsLine(entry.Success ? $"Freed {entry.FreedGB:F2} GB" : $"Failed: {entry.Error}", 0.6);
+                }
+                break;
+
+            case "LastCleaned":
+                var last = JsonLogger.ReadRecent(SettingsStore.HistoryLogPath, 1).FirstOrDefault();
+                if (last is null)
+                {
+                    AddInsightsLine("Nothing cleaned yet this session or before.", 0.6);
+                    break;
+                }
+                string lastTime = DateTimeOffset.TryParse(last.Timestamp, out var ldto) ? ldto.ToLocalTime().ToString("MMM d, h:mm tt") : last.Timestamp;
+                AddInsightsLine(lastTime, 0.6);
+                AddInsightsLine(last.Success ? $"{last.Mode} \u2014 freed {last.FreedGB:F2} GB" : $"{last.Mode} \u2014 failed", 0.9, bold: true, big: true);
+                AddInsightsLine(last.Success ? $"{last.BeforeAvailableGB:F2} GB \u2192 {last.AfterAvailableGB:F2} GB \u2022 {last.DurationMs:F0}ms \u2022 via {last.Source}" : last.Error ?? "", 0.6);
+                break;
+
+            default:
+                var top = ProcessTrimmer.GetTopProcessesByMemory(3);
+                AddInsightsLine("Top memory users right now:", 0.6);
+                foreach (var proc in top)
+                    AddInsightsLine($"{proc.Name} \u2014 {proc.WorkingSetMB:F0} MB", 0.85);
+                break;
+        }
+    }
+
+    private void AddInsightsLine(string text, double opacity, bool bold = false, bool big = false)
+    {
+        InsightsContentPanel.Children.Add(new System.Windows.Controls.TextBlock
+        {
+            Text = text,
+            Opacity = opacity,
+            FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
+            FontSize = big ? 16 : 12,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 4)
+        });
     }
 
     // ----- Memory composition bar -----
@@ -155,11 +230,11 @@ public partial class MainWindow : FluentWindow
         double zeroed = composition.Value.ZeroedMB;
         double active = Math.Max(1, totalMB - standby - modified - free - zeroed);
 
-        AddSegment(active, System.Windows.Media.Color.FromRgb(0xE5, 0x48, 0x4D));   // Active — in use by processes
-        AddSegment(standby, System.Windows.Media.Color.FromRgb(0x3B, 0x82, 0xF6));  // Standby — reclaimable cache
-        AddSegment(modified, System.Windows.Media.Color.FromRgb(0xE5, 0x7A, 0x1A)); // Modified — dirty, pending write
-        AddSegment(free, System.Windows.Media.Color.FromRgb(0x10, 0xB9, 0x81));     // Free — immediately usable
-        AddSegment(zeroed, System.Windows.Media.Color.FromRgb(0x64, 0x74, 0x8B));   // Zeroed — pre-zeroed free pages
+        AddSegment(active, System.Windows.Media.Color.FromRgb(0xE5, 0x48, 0x4D));
+        AddSegment(standby, System.Windows.Media.Color.FromRgb(0x3B, 0x82, 0xF6));
+        AddSegment(modified, System.Windows.Media.Color.FromRgb(0xE5, 0x7A, 0x1A));
+        AddSegment(free, System.Windows.Media.Color.FromRgb(0x10, 0xB9, 0x81));
+        AddSegment(zeroed, System.Windows.Media.Color.FromRgb(0x64, 0x74, 0x8B));
 
         CompositionLegendText.Text =
             $"Active {active:F0} MB \u2022 Standby {standby:F0} MB \u2022 Modified {modified:F0} MB \u2022 " +
@@ -196,21 +271,109 @@ public partial class MainWindow : FluentWindow
 
     private void PopulateFocusList()
     {
-        FocusKeepListBox.Items.Clear();
+        _focusPickerNames.Clear();
 
         foreach (var proc in ProcessTrimmer.GetAllProcessesSortedByName())
+            _focusPickerNames.Add(proc.Name);
+
+        foreach (var saved in _settings.FocusMode.KeepProcessNames)
+        {
+            _focusSelectedNames.Add(saved);
+            if (!_focusPickerNames.Contains(saved, StringComparer.OrdinalIgnoreCase))
+                _focusPickerNames.Add(saved);
+        }
+
+        RenderFocusList();
+    }
+
+    private void RenderFocusList()
+    {
+        string filter = FocusSearchBox.Text?.Trim() ?? "";
+
+        FocusKeepListBox.SelectionChanged -= FocusKeepListBox_SelectionChanged;
+        FocusKeepListBox.Items.Clear();
+
+        foreach (var name in _focusPickerNames
+                     .Where(n => filter.Length == 0 || n.Contains(filter, StringComparison.OrdinalIgnoreCase))
+                     .OrderBy(n => n, StringComparer.OrdinalIgnoreCase))
         {
             var item = new System.Windows.Controls.ListBoxItem
             {
-                Content = $"{proc.Name} ({proc.WorkingSetMB:F0} MB)",
-                Tag = proc.Name,
-                IsSelected = _settings.FocusMode.KeepProcessNames.Contains(proc.Name, StringComparer.OrdinalIgnoreCase)
+                Content = name,
+                Tag = name,
+                IsSelected = _focusSelectedNames.Contains(name)
             };
             FocusKeepListBox.Items.Add(item);
         }
+
+        FocusKeepListBox.SelectionChanged += FocusKeepListBox_SelectionChanged;
+    }
+
+    private void FocusSearchBox_TextChanged(object sender, TextChangedEventArgs e) => RenderFocusList();
+
+    private void FocusKeepListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        foreach (var removed in e.RemovedItems.Cast<System.Windows.Controls.ListBoxItem>())
+            _focusSelectedNames.Remove((string)removed.Tag);
+
+        foreach (var added in e.AddedItems.Cast<System.Windows.Controls.ListBoxItem>())
+            _focusSelectedNames.Add((string)added.Tag);
     }
 
     private void RefreshFocusListButton_Click(object sender, RoutedEventArgs e) => PopulateFocusList();
+
+    private void AddFocusFolderButton_Click(object sender, RoutedEventArgs e)
+    {
+        using var dialog = new System.Windows.Forms.FolderBrowserDialog
+        {
+            Description = "Choose a folder — every .exe directly inside it will be protected."
+        };
+
+        if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+
+        string[] exeFiles;
+        try
+        {
+            exeFiles = System.IO.Directory.GetFiles(dialog.SelectedPath, "*.exe", System.IO.SearchOption.TopDirectoryOnly);
+        }
+        catch (Exception ex)
+        {
+            FocusModeStatusText.Text = $"Couldn't read that folder: {ex.Message}";
+            return;
+        }
+
+        foreach (var file in exeFiles)
+        {
+            string name = System.IO.Path.GetFileNameWithoutExtension(file);
+            if (!_focusPickerNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+                _focusPickerNames.Add(name);
+            _focusSelectedNames.Add(name);
+        }
+
+        RenderFocusList();
+        FocusModeStatusText.Text = exeFiles.Length == 0
+            ? "No .exe files found directly in that folder."
+            : $"Added {exeFiles.Length} app(s) from folder.";
+    }
+
+    private void AddFocusFileButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = "Executable files (*.exe)|*.exe",
+            Title = "Choose an application to protect"
+        };
+
+        if (dialog.ShowDialog() != true) return;
+
+        string name = System.IO.Path.GetFileNameWithoutExtension(dialog.FileName);
+        if (!_focusPickerNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+            _focusPickerNames.Add(name);
+        _focusSelectedNames.Add(name);
+
+        RenderFocusList();
+        FocusModeStatusText.Text = $"Added {name}.";
+    }
 
     private void FocusModeToggleButton_Click(object sender, RoutedEventArgs e)
     {
@@ -218,38 +381,33 @@ public partial class MainWindow : FluentWindow
         {
             _focusModeController.Stop();
             FocusModeToggleButton.Content = "Start Focus Mode";
-            FocusModeToggleButton.Appearance = Wpf.Ui.Controls.ControlAppearance.Primary;
+            FocusModeToggleButton.Appearance = ControlAppearance.Primary;
             FocusModeStatusText.Text = "Focus Mode stopped.";
             return;
         }
 
-        var keepNames = FocusKeepListBox.Items
-            .Cast<System.Windows.Controls.ListBoxItem>()
-            .Where(i => i.IsSelected)
-            .Select(i => (string)i.Tag)
-            .ToList();
-
-        if (keepNames.Count == 0)
+        if (_focusSelectedNames.Count == 0)
         {
             FocusModeStatusText.Text = "Select at least one app to protect first.";
             return;
         }
 
-        _settings.FocusMode.KeepProcessNames = keepNames;
+        _settings.FocusMode.KeepProcessNames = _focusSelectedNames.ToList();
         SettingsStore.Save(_settings);
 
         _focusModeController.Start();
         FocusModeToggleButton.Content = "Stop Focus Mode";
-        FocusModeToggleButton.Appearance = Wpf.Ui.Controls.ControlAppearance.Danger;
-        FocusModeStatusText.Text = $"Focus Mode running \u2014 protecting: {string.Join(", ", keepNames)}. Trimming everything else every {_settings.FocusMode.IntervalSeconds}s.";
+        FocusModeToggleButton.Appearance = ControlAppearance.Danger;
+        FocusModeStatusText.Text = $"Focus Mode running \u2014 protecting: {string.Join(", ", _focusSelectedNames)}. Trimming everything else every {_settings.FocusMode.IntervalSeconds}s.";
     }
 
     private void OnFocusModeTick(RamSavior.Core.Automation.FocusModeTickResult result)
     {
         RefreshStatus();
+        RefreshInsights();
         FocusModeStatusText.Text =
             $"Trimmed {result.ProcessesTrimmed} other process(es), freed {result.SystemCleanResult.FreedGB:F2} GB system-wide. " +
-            $"Still protecting: {string.Join(", ", _settings.FocusMode.KeepProcessNames)}.";
+            $"Still protecting: {string.Join(", ", _focusSelectedNames)}.";
     }
 
     // ----- Automation quick card -----
@@ -298,9 +456,10 @@ public partial class MainWindow : FluentWindow
     {
         var historyWindow = new HistoryWindow(SettingsStore.HistoryLogPath) { Owner = this };
         historyWindow.ShowDialog();
+        RefreshInsights();
     }
 
-    // ----- Advanced checkbox availability (driven by the top Mode selector now) -----
+    // ----- Advanced checkbox availability -----
 
     private void ApplyAdvancedCheckboxAvailability()
     {
@@ -428,7 +587,7 @@ public partial class MainWindow : FluentWindow
 
     private void WireSettingsCallbacks(SettingsWindow settingsWindow)
     {
-        settingsWindow.CompactModeChanged = () => { ApplyCompactMode(); ReflowWindowSize(); };
+        settingsWindow.CompactModeChanged = () => ApplyCompactMode();
         settingsWindow.AutomationChanged = () =>
         {
             RefreshAutomationSummary();
@@ -450,6 +609,8 @@ public partial class MainWindow : FluentWindow
         LoadPercentText.Text = $"{reading.MemoryLoadPercent}% memory load";
 
         RefreshCompositionBar(reading);
+
+        if (_insightsTab == "Status") RefreshInsights();
     }
 
     private void CleanButton_Click(object sender, RoutedEventArgs e)
@@ -504,6 +665,7 @@ public partial class MainWindow : FluentWindow
             {
                 CleanButton.IsEnabled = true;
                 RefreshStatus();
+                RefreshInsights();
 
                 ResultText.Text = result.Success
                     ? $"Freed {result.FreedGB:F2} GB in {result.Duration.TotalMilliseconds:F0}ms " +

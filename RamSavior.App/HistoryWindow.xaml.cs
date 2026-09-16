@@ -1,5 +1,4 @@
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Media;
 using RamSavior.Core.Logging;
 using Wpf.Ui.Controls;
@@ -31,7 +30,7 @@ public partial class HistoryWindow : FluentWindow
 
         foreach (var entry in entries)
         {
-            var row = new Border
+            var row = new System.Windows.Controls.Border
             {
                 Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(20, 255, 255, 255)),
                 CornerRadius = new CornerRadius(6),
