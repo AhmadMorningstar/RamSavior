@@ -159,22 +159,19 @@
                             <TextBlock Text="Pick apps to protect — everything else gets trimmed repeatedly while this runs." FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,10"/>
 
                             <TextBox x:Name="FocusSearchBox" Margin="0,0,0,8" TextChanged="FocusSearchBox_TextChanged"/>
-                            <TextBlock Text="Search by name — type to filter the list below" FontSize="10" Opacity="0.5" Margin="0,-6,0,8"/>
+                            <TextBlock Text="Right-click a name to protect it, left-click to remove it. Type above to search." FontSize="10" Opacity="0.5" Margin="0,-6,0,8" TextWrapping="Wrap"/>
 
-                            <ListBox x:Name="FocusKeepListBox" Height="160" SelectionMode="Extended" Margin="0,0,0,8" SelectionChanged="FocusKeepListBox_SelectionChanged"/>
+                            <Border BorderBrush="#33FFFFFF" BorderThickness="1" CornerRadius="4" Height="180" Margin="0,0,0,8">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel x:Name="FocusKeepPanel" Margin="8"/>
+                                </ScrollViewer>
+                            </Border>
 
-                            <Grid Margin="0,0,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="8"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="8"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <ui:Button Grid.Column="0" Content="Add Folder..." Appearance="Secondary" FontSize="11" Click="AddFocusFolderButton_Click"/>
-                                <ui:Button Grid.Column="2" Content="Add File..." Appearance="Secondary" FontSize="11" Click="AddFocusFileButton_Click"/>
-                                <ui:Button Grid.Column="4" Icon="{ui:SymbolIcon Symbol=ArrowSync24}" Appearance="Secondary" Width="32" Padding="0" Click="RefreshFocusListButton_Click"/>
-                            </Grid>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <ui:Button Content="Add Folder..." Appearance="Secondary" FontSize="11" Margin="0,0,8,0" Click="AddFocusFolderButton_Click"/>
+                                <ui:Button Content="Add File..." Appearance="Secondary" FontSize="11" Margin="0,0,8,0" Click="AddFocusFileButton_Click"/>
+                                <ui:Button Icon="{ui:SymbolIcon Symbol=ArrowSync24}" Appearance="Secondary" Width="32" Padding="0" Click="RefreshFocusListButton_Click"/>
+                            </StackPanel>
 
                             <ui:Button x:Name="FocusModeToggleButton" Content="Start Focus Mode" Appearance="Primary" Height="40" Click="FocusModeToggleButton_Click"/>
                             <TextBlock x:Name="FocusModeStatusText" Margin="0,8,0,0" FontSize="11" Opacity="0.8" TextWrapping="Wrap"/>

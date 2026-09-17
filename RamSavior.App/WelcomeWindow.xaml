@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="Welcome to RAM Savior"
-        Height="480" Width="420"
+        Width="820" Height="420"
         WindowBackdropType="Mica"
         ExtendsContentIntoTitleBar="True"
         WindowStartupLocation="CenterScreen">
@@ -20,21 +20,43 @@
             <TextBlock Text="RAM Savior" FontSize="24" FontWeight="Bold" Margin="0,0,0,4"/>
             <TextBlock Text="A quick orientation before you dive in." Opacity="0.7" Margin="0,0,0,20" TextWrapping="Wrap"/>
 
-            <TextBlock FontWeight="SemiBold" Text="Four tiers, from safe to hands-on" Margin="0,0,0,4"/>
-            <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
-                       Text="Normal and Moderate are safe defaults — good for automation. Advanced lets you pick exactly which cleanup actions run. Experimental adds per-process memory trimming. Advanced and Experimental need to be turned on in Settings first."/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
 
-            <TextBlock FontWeight="SemiBold" Text="Automation runs in the background" Margin="0,0,0,4"/>
-            <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
-                       Text="Closing this window minimizes to the tray rather than exiting, so scheduled or threshold-based cleaning keeps working. Right-click the tray icon to fully exit."/>
+                <Border Grid.Column="0" Background="#14FFFFFF" CornerRadius="8" Padding="16">
+                    <StackPanel>
+                        <TextBlock FontWeight="SemiBold" Text="Four tiers" Margin="0,0,0,6"/>
+                        <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap"
+                                   Text="Normal and Moderate are safe, automation-friendly defaults. Advanced lets you pick exactly what runs. Experimental adds per-process tools. Switch between them with the Mode dropdown at the top of the main window."/>
+                    </StackPanel>
+                </Border>
 
-            <TextBlock FontWeight="SemiBold" Text="Nothing risky happens automatically" Margin="0,0,0,4"/>
-            <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,20"
-                       Text="Automation only ever runs Normal or Moderate — Advanced and Experimental actions always require you to trigger them yourself."/>
+                <Border Grid.Column="2" Background="#14FFFFFF" CornerRadius="8" Padding="16">
+                    <StackPanel>
+                        <TextBlock FontWeight="SemiBold" Text="Runs in the background" Margin="0,0,0,6"/>
+                        <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap"
+                                   Text="Closing this window minimizes to the tray instead of exiting, so scheduled or threshold-based cleaning keeps working. Right-click the tray icon to fully exit."/>
+                    </StackPanel>
+                </Border>
 
-            <CheckBox x:Name="DontShowAgainCheckBox" Content="Don't show this again on startup" IsChecked="True" Margin="0,0,0,12"/>
+                <Border Grid.Column="4" Background="#14FFFFFF" CornerRadius="8" Padding="16">
+                    <StackPanel>
+                        <TextBlock FontWeight="SemiBold" Text="Nothing risky, unattended" Margin="0,0,0,6"/>
+                        <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap"
+                                   Text="Automation only ever runs Normal or Moderate — Advanced and Experimental actions always require you to trigger them yourself."/>
+                    </StackPanel>
+                </Border>
+            </Grid>
 
-            <ui:Button Content="Got it, let's go" Appearance="Primary" Height="40" Click="GotItButton_Click"/>
+            <CheckBox x:Name="DontShowAgainCheckBox" Content="Don't show this again on startup" IsChecked="True" Margin="0,20,0,12"/>
+
+            <ui:Button Content="Got it, let's go" Appearance="Primary" Height="40" HorizontalAlignment="Left" Width="200" Click="GotItButton_Click"/>
         </StackPanel>
     </Grid>
 </ui:FluentWindow>

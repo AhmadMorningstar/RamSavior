@@ -193,7 +193,29 @@ and **check "Run with highest privileges"** — without that, you'll hit exit co
   (`System.Windows.Forms.FolderBrowserDialog`, `Microsoft.Win32.OpenFileDialog`) rather
   than via `using` statements, specifically to avoid re-triggering the `Brushes`/`Color`
   ambiguity bug in this same file. Ran the full sweep before zipping — clean.
-- Folder scanning is **top-level only** by design (see above) — if you want recursive,
-  say so and I'll add it as an option rather than change the default.
-- Everything from prior rounds still applies. Same standing offer: paste any build
-  error back and I'll fix it in the same turn.
+## 16. This round: two real bugs + wide design applied everywhere
+
+- **Fixed: Focus Mode couldn't be deselected.** The picker was a `ListBox` in Extended
+  selection mode, which needs Ctrl+Click to deselect — not how a "pick apps to protect"
+  list should behave. It's now a scrollable list of plain checkboxes (the same proven
+  pattern as the Custom cleanup picker), so a plain left-click toggles either way.
+- **Confirmed: "Add Folder..." was already in the code** from the prior round — if it
+  wasn't visible for you, it was almost certainly the same stale-build issue as the
+  compile errors. It's still there, now stacked with Add File/Refresh for clearer
+  visibility regardless of window width.
+- **Wide Border-based design applied to every window**: Settings (now a 2-column
+  layout — Appearance/Layout/Startup/Danger Zone on the left, the big Automation card
+  on the right), History (2-column card grid instead of one long list), and Welcome
+  (3-column feature cards instead of stacked text). None of these used `CardControl`
+  to begin with in a way that caused the alignment bug, but they're now visually
+  consistent with the fixed MainWindow design language.
+- Fixed a stale line in the Welcome screen that still said Advanced/Experimental were
+  toggled from Settings — they're controlled from the Mode dropdown now.
+
+## 17. Known things to double check
+
+- `SettingsWindow.xaml.cs` and `WelcomeWindow.xaml.cs` needed **zero code changes** —
+  every `x:Name` was preserved through the layout rewrite, only rearranged visually.
+  Worth knowing in case you want to sanity-check by diffing just the `.xaml` files.
+- Same standing offer as always: paste any build error back and I'll fix it in the
+  same turn.

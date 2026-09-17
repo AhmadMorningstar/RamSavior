@@ -290,35 +290,68 @@ public partial class MainWindow : FluentWindow
     {
         string filter = FocusSearchBox.Text?.Trim() ?? "";
 
-        FocusKeepListBox.SelectionChanged -= FocusKeepListBox_SelectionChanged;
-        FocusKeepListBox.Items.Clear();
+        FocusKeepPanel.Children.Clear();
 
         foreach (var name in _focusPickerNames
                      .Where(n => filter.Length == 0 || n.Contains(filter, StringComparison.OrdinalIgnoreCase))
                      .OrderBy(n => n, StringComparer.OrdinalIgnoreCase))
         {
-            var item = new System.Windows.Controls.ListBoxItem
-            {
-                Content = name,
-                Tag = name,
-                IsSelected = _focusSelectedNames.Contains(name)
-            };
-            FocusKeepListBox.Items.Add(item);
+            FocusKeepPanel.Children.Add(BuildFocusRow(name));
+        }
+    }
+
+    /// <summary>
+    /// Right-click selects, left-click deselects — inverted from the usual convention on
+    /// purpose, per how this feature is meant to be used: right-click to quickly protect
+    /// several apps in a row without needing Ctrl held down, left-click to back one out.
+    /// Built as a plain Border (not a CheckBox/ListBoxItem) specifically so nothing here
+    /// has its own default left-click behavior we'd need to fight.
+    /// </summary>
+    private Border BuildFocusRow(string name)
+    {
+        var label = new System.Windows.Controls.TextBlock
+        {
+            Text = name,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var row = new Border
+        {
+            Padding = new Thickness(8, 6, 8, 6),
+            CornerRadius = new CornerRadius(4),
+            Margin = new Thickness(0, 0, 0, 2),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            Child = label
+        };
+
+        void ApplySelectedVisual(bool selected)
+        {
+            row.Background = selected
+                ? new SolidColorBrush(System.Windows.Media.Color.FromArgb(70, 0xFF, 0xB8, 0x00))
+                : System.Windows.Media.Brushes.Transparent;
+            label.FontWeight = selected ? FontWeights.SemiBold : FontWeights.Normal;
         }
 
-        FocusKeepListBox.SelectionChanged += FocusKeepListBox_SelectionChanged;
+        ApplySelectedVisual(_focusSelectedNames.Contains(name));
+
+        row.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            e.Handled = true;
+            _focusSelectedNames.Remove(name);
+            ApplySelectedVisual(false);
+        };
+
+        row.PreviewMouseRightButtonDown += (_, e) =>
+        {
+            e.Handled = true;
+            _focusSelectedNames.Add(name);
+            ApplySelectedVisual(true);
+        };
+
+        return row;
     }
 
     private void FocusSearchBox_TextChanged(object sender, TextChangedEventArgs e) => RenderFocusList();
-
-    private void FocusKeepListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        foreach (var removed in e.RemovedItems.Cast<System.Windows.Controls.ListBoxItem>())
-            _focusSelectedNames.Remove((string)removed.Tag);
-
-        foreach (var added in e.AddedItems.Cast<System.Windows.Controls.ListBoxItem>())
-            _focusSelectedNames.Add((string)added.Tag);
-    }
 
     private void RefreshFocusListButton_Click(object sender, RoutedEventArgs e) => PopulateFocusList();
 

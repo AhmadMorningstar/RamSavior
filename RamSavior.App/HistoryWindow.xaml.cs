@@ -35,7 +35,8 @@ public partial class HistoryWindow : FluentWindow
                 Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(20, 255, 255, 255)),
                 CornerRadius = new CornerRadius(6),
                 Padding = new Thickness(12),
-                Margin = new Thickness(0, 0, 0, 8)
+                Margin = new Thickness(0, 0, 8, 8),
+                Width = 340
             };
 
             var stack = new System.Windows.Controls.StackPanel();

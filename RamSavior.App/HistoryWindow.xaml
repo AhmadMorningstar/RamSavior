@@ -3,8 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="History"
-        Height="480" Width="420"
-        MinHeight="300" MinWidth="360"
+        Height="600" Width="1080"
+        MinHeight="360" MinWidth="600"
         WindowBackdropType="Mica"
         ExtendsContentIntoTitleBar="True"
         WindowStartupLocation="CenterOwner">
@@ -18,7 +18,7 @@
         <ui:TitleBar Title="Recent cleaning history" Grid.Row="0"/>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel x:Name="EntriesPanel" Margin="16"/>
+            <WrapPanel x:Name="EntriesPanel" Margin="16" Orientation="Horizontal"/>
         </ScrollViewer>
     </Grid>
 </ui:FluentWindow>
