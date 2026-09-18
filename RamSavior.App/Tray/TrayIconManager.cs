@@ -1,15 +1,10 @@
 using System.Drawing;
-using System.Drawing.Drawing2D;
+using System.IO;
+using System.Windows;
 using System.Windows.Forms;
 
 namespace RamSavior.App.Tray;
 
-/// <summary>
-/// Deliberately isolated to only System.Drawing / System.Windows.Forms usings — mixing
-/// those with System.Windows (WPF) in the same file is exactly what caused the
-/// ambiguous TextBlock error earlier in this project, so this file stays WPF-free and
-/// callers interact with it through plain events/methods instead.
-/// </summary>
 public sealed class TrayIconManager : IDisposable
 {
     private readonly NotifyIcon _notifyIcon;
@@ -28,7 +23,7 @@ public sealed class TrayIconManager : IDisposable
 
         _notifyIcon = new NotifyIcon
         {
-            Icon = BuildIcon(),
+            Icon = LoadAppIcon(),
             Text = "RAM Savior",
             Visible = true,
             ContextMenuStrip = menu
@@ -37,19 +32,25 @@ public sealed class TrayIconManager : IDisposable
         _notifyIcon.DoubleClick += (_, _) => OpenRequested?.Invoke();
     }
 
-    /// <summary>Small amber circle drawn at runtime so we don't need to ship a separate .ico asset.</summary>
-    private static Icon BuildIcon()
+    private static Icon LoadAppIcon()
     {
-        using var bitmap = new Bitmap(32, 32);
-        using (var g = Graphics.FromImage(bitmap))
+        try
         {
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            using var brush = new SolidBrush(Color.FromArgb(255, 0xFF, 0xB8, 0x00));
-            g.FillEllipse(brush, 2, 2, 28, 28);
+            // Pack URI pointing to the embedded WPF resource inside the assembly
+            var uri = new Uri("pack://application:,,,/Assets/Icons/app.ico", UriKind.Absolute);
+            var streamInfo = System.Windows.Application.GetResourceStream(uri);
+
+            if (streamInfo?.Stream != null)
+            {
+                return new Icon(streamInfo.Stream);
+            }
+        }
+        catch
+        {
+            // Fall back to system icon if resource resolution fails
         }
 
-        nint hIcon = bitmap.GetHicon();
-        return Icon.FromHandle(hIcon);
+        return SystemIcons.Application;
     }
 
     public void ShowBalloon(string title, string text)
@@ -61,7 +62,6 @@ public sealed class TrayIconManager : IDisposable
 
     public void UpdateTooltip(string text)
     {
-        // NotifyIcon.Text has a 63-character limit.
         _notifyIcon.Text = text.Length > 63 ? text[..63] : text;
     }
 
