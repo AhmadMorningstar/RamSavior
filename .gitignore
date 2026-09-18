@@ -431,6 +431,9 @@ FodyWeavers.xsd
 # Local publish directory
 Publish/
 
+# Local Files
+notes.txt
+
 # Compressed Archives
 *.zip
 *.rar
