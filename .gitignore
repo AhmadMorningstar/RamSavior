@@ -430,3 +430,10 @@ FodyWeavers.xsd
 
 # Local publish directory
 Publish/
+
+# Compressed Archives
+*.zip
+*.rar
+*.7z
+*.tar
+*.gz
