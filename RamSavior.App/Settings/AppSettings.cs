@@ -37,13 +37,18 @@ public class AppSettings
     public bool EnableExperimentalFeatures { get; set; } = false;
 
     /// <summary>
-    /// Automation only ever runs Normal or Moderate tier cleans (never Custom/Advanced/
-    /// Experimental) — a deliberate safety choice: actions with real tradeoffs shouldn't
-    /// fire unattended without the user present to notice if something feels off.
+    /// By default automation only ever runs Normal or Moderate tier cleans — a deliberate
+    /// safety choice, since actions with real tradeoffs shouldn't fire unattended without
+    /// the user present to notice if something feels off. Custom is possible (see
+    /// <see cref="AutomationTier"/>/<see cref="AutomationCustomItems"/>) but only while the
+    /// main window itself is set to Advanced or Experimental mode — a user who has never
+    /// opted into Advanced/Experimental cleaning by hand can't end up with it running
+    /// silently in the background either.
     /// </summary>
     public RamSavior.Core.Automation.AutomationTrigger Automation { get; set; } = new();
 
-    /// <summary>Which tier automation uses when it fires. Restricted to Normal/Moderate at the UI level.</summary>
+    /// <summary>Which tier automation uses when it fires. Custom is only honored while
+    /// <see cref="EnableAdvancedCleaning"/> is true; otherwise automation clamps to Normal/Moderate.</summary>
     public RamSavior.Core.Engine.CleanMode AutomationTier { get; set; } = RamSavior.Core.Engine.CleanMode.Normal;
 
     /// <summary>Tracks whether we've already told the user "closing minimizes to tray" once.</summary>
@@ -65,10 +70,41 @@ public class AppSettings
     /// deliberate, attended session, not something that silently resumes in the background.
     /// </summary>
     public FocusModeSettings FocusMode { get; set; } = new();
+
+    /// <summary>
+    /// Which cleanup items automation is allowed to run when <see cref="AutomationTier"/> is
+    /// set to Custom. Only ever honored while <see cref="EnableAdvancedCleaning"/> is true —
+    /// switching the main window back to Normal mode silently falls back to a safe
+    /// Normal/Moderate tier for automation, even if this list still has entries saved.
+    /// </summary>
+    public List<RamSavior.Core.Engine.MemoryListCommand> AutomationCustomItems { get; set; } = new();
+
+    /// <summary>Which sections of the main window are shown. Only editable (via the Layout
+    /// icon) in Experimental mode, but applies to whichever mode is active.</summary>
+    public MainLayoutSettings Layout { get; set; } = new();
 }
 
 public class FocusModeSettings
 {
     public List<string> KeepProcessNames { get; set; } = new();
     public int IntervalSeconds { get; set; } = 20;
+
+    /// <summary>Height in device-independent pixels of the resizable protected-apps list.
+    /// Only adjustable (via the drag handle) in Experimental mode.</summary>
+    public double ListHeight { get; set; } = 180;
+}
+
+/// <summary>
+/// Lets a user hide main-window sections they don't use (e.g. someone who never touches
+/// Automation can reclaim that space for Focus Mode). Everything defaults to visible so
+/// existing users see no change until they open the Layout picker themselves.
+/// </summary>
+public class MainLayoutSettings
+{
+    public bool ShowMemoryStatus { get; set; } = true;
+    public bool ShowInsights { get; set; } = true;
+    public bool ShowAutomation { get; set; } = true;
+    public bool ShowClean { get; set; } = true;
+    public bool ShowFocusMode { get; set; } = true;
+    public bool ShowPerProcessTrim { get; set; } = true;
 }

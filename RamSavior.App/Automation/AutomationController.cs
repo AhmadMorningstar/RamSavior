@@ -27,9 +27,18 @@ public sealed class AutomationController : IDisposable
 
     private CleanupResult RunConfiguredClean()
     {
-        // Deliberately clamped to Normal/Moderate even if something upstream ever tries
-        // to set AutomationTier to Custom — unattended automation should never run a
-        // user-picked Advanced/Experimental combination.
+        // Custom automation items are only ever honored while the main window is in
+        // Advanced or Experimental mode AND the user explicitly picked Custom in
+        // Configure. If the window gets switched back to Normal mode, automation falls
+        // straight back to the safe Normal/Moderate tier below, even though the saved
+        // item list is left untouched (so it's there again if they switch back).
+        if (_settings.AutomationTier == CleanMode.Custom &&
+            _settings.EnableAdvancedCleaning &&
+            _settings.AutomationCustomItems.Count > 0)
+        {
+            return CleanupEngine.RunCustom(new HashSet<MemoryListCommand>(_settings.AutomationCustomItems));
+        }
+
         var tier = _settings.AutomationTier == CleanMode.Moderate ? CleanMode.Moderate : CleanMode.Normal;
         return CleanupEngine.Run(tier);
     }

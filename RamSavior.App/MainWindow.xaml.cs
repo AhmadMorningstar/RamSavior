@@ -27,6 +27,15 @@ public partial class MainWindow : FluentWindow
 
     private string _insightsTab = "Status";
     private bool _isLoaded;
+    private double _lastAutoWidth;
+
+    // Per-mode sizing so switching modes doesn't leave the window too small (text/buttons
+    // crowded) or oddly oversized. MinWidth/MinHeight are hard floors; PreferredWidth is
+    // only applied when the window still looks like it's at its previous mode's auto size
+    // (i.e. the user hasn't manually resized it) — see ApplyModeSizing.
+    private static readonly (double MinW, double MinH, double PreferredW) NormalSize = (875, 495, 900);
+    private static readonly (double MinW, double MinH, double PreferredW) AdvancedSize = (875, 640, 1000);
+    private static readonly (double MinW, double MinH, double PreferredW) ExperimentalSize = (1180, 660, 1500);
 
     public MainWindow(AppSettings settings)
     {
@@ -37,10 +46,13 @@ public partial class MainWindow : FluentWindow
 
         BuildCustomItemsPanel();
         ApplyCompactMode();
+        FocusListRow.Height = new GridLength(Math.Clamp(_settings.FocusMode.ListHeight, 80, 500));
+        UpdateThemeToggleIcon();
 
         _isLoaded = false;
         UiModeComboBox.SelectedIndex = _settings.EnableExperimentalFeatures ? 2 : _settings.EnableAdvancedCleaning ? 1 : 0;
         ApplyUiMode();
+        ApplyLayoutVisibility();
         RefreshAutomationSummary();
         RefreshInsights();
         _isLoaded = true;
@@ -123,16 +135,115 @@ public partial class MainWindow : FluentWindow
         ExperimentalArea.Visibility = showExperimental ? Visibility.Visible : Visibility.Collapsed;
         ExperimentalGutterColumn.Width = showExperimental ? new GridLength(24) : new GridLength(0);
         ExperimentalColumn.Width = showExperimental ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        LayoutButton.Visibility = showExperimental ? Visibility.Visible : Visibility.Collapsed;
 
         if (level < 1 && CustomModeRadio.IsChecked == true)
             NormalModeRadio.IsChecked = true;
 
         ApplyAdvancedCheckboxAvailability();
+        ApplyModeSizing(level);
 
         if (showExperimental && ProcessComboBox.Items.Count == 0)
             RefreshProcessList();
         if (showExperimental && _focusPickerNames.Count == 0)
             PopulateFocusList();
+    }
+
+    /// <summary>
+    /// Grows the window (and raises its floor) to fit whichever mode is now active,
+    /// instead of leaving the user to drag it wider/narrower by hand every time they
+    /// switch modes — that manual-resize dance was the original complaint. Only ever
+    /// grows automatically; if the user has deliberately made the window wider than the
+    /// mode's preferred size, that choice is left alone.
+    /// </summary>
+    private void ApplyModeSizing(int level)
+    {
+        var target = level switch
+        {
+            2 => ExperimentalSize,
+            1 => AdvancedSize,
+            _ => NormalSize
+        };
+
+        MinWidth = target.MinW;
+        MinHeight = target.MinH;
+
+        if (WindowState != WindowState.Normal) return; // don't fight a maximized/minimized window
+
+        bool looksAutoSized = !_isLoaded || Width <= _lastAutoWidth + 0.5;
+
+        if (looksAutoSized || Width < target.MinW)
+        {
+            Width = Math.Max(target.PreferredW, target.MinW);
+            _lastAutoWidth = Width;
+        }
+
+        if (Height < target.MinH)
+            Height = Math.Min(target.MinH, SystemParameters.WorkArea.Height - 40);
+    }
+
+    // ----- Quick light/dark appearance toggle -----
+
+    private void ThemeToggleButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Deliberately resolves to a concrete Light/Dark choice rather than toggling
+        // "System" — once someone reaches for a manual quick-switch they want a definite
+        // answer, and the icon needs to reliably reflect the app's actual appearance.
+        _settings.Theme = IsEffectivelyLight() ? ThemeChoice.Dark : ThemeChoice.Light;
+        SettingsStore.Save(_settings);
+        ThemeApplier.Apply(_settings);
+        UpdateThemeToggleIcon();
+    }
+
+    private bool IsEffectivelyLight() => _settings.Theme switch
+    {
+        ThemeChoice.Light => true,
+        ThemeChoice.Dark => false,
+        _ => ThemeApplier.IsWindowsUsingLightTheme()
+    };
+
+    private void UpdateThemeToggleIcon()
+    {
+        bool light = IsEffectivelyLight();
+        ThemeToggleButton.Icon = new Wpf.Ui.Controls.SymbolIcon
+        {
+            Symbol = light ? Wpf.Ui.Controls.SymbolRegular.WeatherSunny24 : Wpf.Ui.Controls.SymbolRegular.WeatherMoon24
+        };
+        ThemeToggleButton.ToolTip = light ? "Switch to dark appearance" : "Switch to light appearance";
+    }
+
+    // ----- Layout picker (Experimental only) -----
+
+    private void LayoutButton_Click(object sender, RoutedEventArgs e)
+    {
+        var layoutWindow = new LayoutWindow(_settings) { Owner = this };
+        layoutWindow.LayoutChanged = ApplyLayoutVisibility;
+        layoutWindow.ShowDialog();
+    }
+
+    private void ApplyLayoutVisibility()
+    {
+        var layout = _settings.Layout;
+        MemoryStatusSection.Visibility = layout.ShowMemoryStatus ? Visibility.Visible : Visibility.Collapsed;
+        InsightsSection.Visibility = layout.ShowInsights ? Visibility.Visible : Visibility.Collapsed;
+        AutomationSection.Visibility = layout.ShowAutomation ? Visibility.Visible : Visibility.Collapsed;
+        CleanSection.Visibility = layout.ShowClean ? Visibility.Visible : Visibility.Collapsed;
+        FocusModeSection.Visibility = layout.ShowFocusMode ? Visibility.Visible : Visibility.Collapsed;
+        PerProcessTrimSection.Visibility = layout.ShowPerProcessTrim ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // ----- Focus Mode list resize handle (Experimental) -----
+
+    private void FocusListResizeThumb_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
+    {
+        double current = FocusListRow.Height.Value;
+        FocusListRow.Height = new GridLength(Math.Clamp(current + e.VerticalChange, 80, 500));
+    }
+
+    private void FocusListResizeThumb_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
+    {
+        _settings.FocusMode.ListHeight = FocusListRow.Height.Value;
+        SettingsStore.Save(_settings);
     }
 
     // ----- Insights (Status / History / Last Cleaned) -----
@@ -355,6 +466,19 @@ public partial class MainWindow : FluentWindow
 
     private void RefreshFocusListButton_Click(object sender, RoutedEventArgs e) => PopulateFocusList();
 
+    private void DeselectAllFocusButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_focusSelectedNames.Count == 0)
+        {
+            FocusModeStatusText.Text = "Nothing is protected yet.";
+            return;
+        }
+
+        _focusSelectedNames.Clear();
+        RenderFocusList();
+        FocusModeStatusText.Text = "Cleared — no apps are protected. Pick at least one before starting Focus Mode.";
+    }
+
     private void AddFocusFolderButton_Click(object sender, RoutedEventArgs e)
     {
         using var dialog = new System.Windows.Forms.FolderBrowserDialog
@@ -480,7 +604,7 @@ public partial class MainWindow : FluentWindow
 
     private void ConfigureAutomationButton_Click(object sender, RoutedEventArgs e)
     {
-        var settingsWindow = new SettingsWindow(_settings) { Owner = this };
+        var settingsWindow = new SettingsWindow(_settings, scrollToAutomation: true) { Owner = this };
         WireSettingsCallbacks(settingsWindow);
         settingsWindow.ShowDialog();
     }
@@ -616,6 +740,14 @@ public partial class MainWindow : FluentWindow
         var settingsWindow = new SettingsWindow(_settings) { Owner = this };
         WireSettingsCallbacks(settingsWindow);
         settingsWindow.ShowDialog();
+    }
+
+    private void AutomationConfigButton_Click(object sender, RoutedEventArgs e)
+    {
+        var settingsWindow = new SettingsWindow(_settings, scrollToAutomation: true) { Owner = this };
+        WireSettingsCallbacks(settingsWindow);
+        settingsWindow.ShowDialog();
+        RefreshAutomationSummary();
     }
 
     private void WireSettingsCallbacks(SettingsWindow settingsWindow)

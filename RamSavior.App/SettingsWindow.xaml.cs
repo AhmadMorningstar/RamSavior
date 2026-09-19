@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using RamSavior.App.Settings;
 using RamSavior.Core.Automation;
+using RamSavior.Core.Engine;
 using Wpf.Ui.Controls;
 
 namespace RamSavior.App;
@@ -12,18 +13,23 @@ public partial class SettingsWindow : FluentWindow
     private readonly AppSettings _settings;
     private bool _isLoaded;
     private readonly Dictionary<string, Border> _swatchBorders = new();
+    private readonly Dictionary<MemoryListCommand, System.Windows.Controls.CheckBox> _autoCustomCheckboxes = new();
 
     public Action? CompactModeChanged { get; set; }
     public Action? AutomationChanged { get; set; }
     public Action? StartWithWindowsChanged { get; set; }
     public Action? GlobalHotkeyChanged { get; set; }
 
-    public SettingsWindow(AppSettings settings)
+    /// <summary>When true, the window scrolls itself so the Automation card is in view as
+    /// soon as it opens — used by the top-bar "Automation Configuration" icon so it feels
+    /// like a dedicated shortcut rather than a generic Settings launch.</summary>
+    public SettingsWindow(AppSettings settings, bool scrollToAutomation = false)
     {
         InitializeComponent();
         _settings = settings;
 
         BuildSwatches();
+        BuildAutoCustomItemsPanel();
 
         _isLoaded = false;
         (_settings.Theme switch
@@ -54,9 +60,144 @@ public partial class SettingsWindow : FluentWindow
         IdleMinutesBox.Text = auto.RequireIdleMinutes.ToString();
         ExcludedProcessesBox.Text = string.Join(", ", auto.ExcludedProcessNames);
 
+        (_settings.AutomationTier switch
+        {
+            CleanMode.Moderate => AutoTierModerateRadio,
+            CleanMode.Custom => AutoTierCustomRadio,
+            _ => AutoTierNormalRadio
+        }).IsChecked = true;
+
+        foreach (var (command, checkBox) in _autoCustomCheckboxes)
+            checkBox.IsChecked = _settings.AutomationCustomItems.Contains(command);
+
+        ApplyAutoTierAvailability();
+
         _isLoaded = true;
 
         HighlightSelectedSwatch();
+
+        if (scrollToAutomation)
+        {
+            Loaded += (_, _) => Dispatcher.BeginInvoke(new Action(() =>
+                AutomationCard.BringIntoView()), System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+    }
+
+    /// <summary>
+    /// Builds the "what automation cleans" checklist the same way MainWindow builds its
+    /// Custom-tier picker — same titles, same descriptions, same ADVANCED badges — so a
+    /// user who has already learned that panel doesn't need to relearn a second one here.
+    /// </summary>
+    private void BuildAutoCustomItemsPanel()
+    {
+        AutoCustomItemsPanel.Children.Clear();
+        _autoCustomCheckboxes.Clear();
+
+        foreach (var info in MemoryCommandCatalog.All)
+        {
+            var container = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+            var headerRow = new DockPanel();
+
+            var checkBox = new System.Windows.Controls.CheckBox
+            {
+                Content = info.Title,
+                FontWeight = FontWeights.SemiBold,
+                ToolTip = info.Description
+            };
+            checkBox.Checked += AutoCustomItem_Changed;
+            checkBox.Unchecked += AutoCustomItem_Changed;
+            DockPanel.SetDock(checkBox, Dock.Left);
+            headerRow.Children.Add(checkBox);
+
+            if (info.IsAdvanced)
+            {
+                var badge = new Border
+                {
+                    Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE5, 0x7A, 0x1A)),
+                    CornerRadius = new CornerRadius(4),
+                    Padding = new Thickness(6, 1, 6, 1),
+                    Margin = new Thickness(8, 0, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Child = new System.Windows.Controls.TextBlock
+                    {
+                        Text = "ADVANCED",
+                        FontSize = 9,
+                        FontWeight = FontWeights.Bold,
+                        Foreground = System.Windows.Media.Brushes.White
+                    }
+                };
+                headerRow.Children.Add(badge);
+            }
+
+            var description = new System.Windows.Controls.TextBlock
+            {
+                Text = info.Description,
+                FontSize = 11,
+                Opacity = 0.6,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(20, 2, 0, 0)
+            };
+
+            container.Children.Add(headerRow);
+            container.Children.Add(description);
+            AutoCustomItemsPanel.Children.Add(container);
+
+            _autoCustomCheckboxes[info.Command] = checkBox;
+        }
+    }
+
+    private void AutoCustomItem_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_isLoaded) return;
+
+        _settings.AutomationCustomItems = _autoCustomCheckboxes
+            .Where(kv => kv.Value.IsChecked == true)
+            .Select(kv => kv.Key)
+            .ToList();
+
+        SettingsStore.Save(_settings);
+        StatusText.Text = "Automation item selection saved.";
+        AutomationChanged?.Invoke();
+    }
+
+    private void AutomationTierRadio_Checked(object sender, RoutedEventArgs e)
+    {
+        if (!_isLoaded) return;
+
+        _settings.AutomationTier = sender switch
+        {
+            _ when ReferenceEquals(sender, AutoTierModerateRadio) => CleanMode.Moderate,
+            _ when ReferenceEquals(sender, AutoTierCustomRadio) => CleanMode.Custom,
+            _ => CleanMode.Normal
+        };
+
+        SettingsStore.Save(_settings);
+        ApplyAutoTierAvailability();
+        StatusText.Text = $"Automation now cleans using: {_settings.AutomationTier}.";
+        AutomationChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Custom is only selectable while the main window is in Advanced or Experimental
+    /// mode — mirrors the same safety gate AutomationController enforces at run time, so
+    /// the UI never lets a user configure something that won't actually take effect.
+    /// </summary>
+    private void ApplyAutoTierAvailability()
+    {
+        bool unlocked = _settings.EnableAdvancedCleaning;
+
+        AutoTierCustomRadio.IsEnabled = unlocked;
+        AutoTierCustomLockedText.Visibility = unlocked ? Visibility.Collapsed : Visibility.Visible;
+
+        if (!unlocked && AutoTierCustomRadio.IsChecked == true)
+            AutoTierNormalRadio.IsChecked = true; // also flips _settings.AutomationTier via the handler above
+
+        AutoCustomPanel.Visibility = unlocked && AutoTierCustomRadio.IsChecked == true
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        foreach (var checkBox in _autoCustomCheckboxes.Values)
+            checkBox.IsEnabled = unlocked;
     }
 
     private void BuildSwatches()

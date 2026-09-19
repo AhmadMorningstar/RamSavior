@@ -55,7 +55,9 @@ public static class ThemeApplier
     /// instead of relying on a WPF-UI helper method whose exact name can vary by
     /// version — this is a value Windows has kept stable since Windows 10 1607.
     /// </summary>
-    private static bool IsWindowsUsingLightTheme()
+    /// <summary>Internal (not private) so MainWindow's quick light/dark toggle can resolve
+    /// what "System" currently resolves to, without depending on a WPF-UI query API.</summary>
+    internal static bool IsWindowsUsingLightTheme()
     {
         try
         {
