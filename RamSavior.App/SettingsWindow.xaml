@@ -2,10 +2,10 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-        Icon="Assets/Icons/app.ico"         
+        Icon="Assets/Icons/app.ico"
         Title="Settings"
-        Width="1200" Height="750"
-        MinHeight="490" MinWidth="850"
+        Width="640" Height="760"
+        MinHeight="440" MinWidth="480"
         WindowBackdropType="Mica"
         ExtendsContentIntoTitleBar="True"
         WindowStartupLocation="CenterOwner">
@@ -18,226 +18,71 @@
 
         <ui:TitleBar Title="Settings" Grid.Row="0" />
 
-        <ScrollViewer x:Name="SettingsScrollViewer" Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="24,12,24,24">
 
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="340"/>
-                    <ColumnDefinition Width="24"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-
-                <!-- LEFT: Appearance, Layout, Startup & Shortcuts, Danger Zone -->
-                <StackPanel Grid.Column="0">
-
-                    <TextBlock Text="Appearance" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
-                    <Border Background="#14FFFFFF" CornerRadius="8" Padding="16" Margin="0,0,0,16">
-                        <StackPanel>
-                            <RadioButton x:Name="SystemThemeRadio" Content="Follow system" GroupName="Theme" ToolTip="Matches whatever Windows itself is set to, light or dark." Checked="ThemeRadio_Checked"/>
-                            <RadioButton x:Name="LightThemeRadio" Content="Light" GroupName="Theme" Margin="0,6,0,0" ToolTip="Always use the light appearance, regardless of Windows settings." Checked="ThemeRadio_Checked"/>
-                            <RadioButton x:Name="DarkThemeRadio" Content="Dark" GroupName="Theme" Margin="0,6,0,0" ToolTip="Always use the dark appearance, regardless of Windows settings." Checked="ThemeRadio_Checked"/>
-                        </StackPanel>
-                    </Border>
-
-                    <TextBlock Text="Accent Color" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
-                    <ItemsControl x:Name="AccentSwatches" Margin="0,0,0,16">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel Orientation="Horizontal"/>
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                    </ItemsControl>
-
-                    <TextBlock Text="Layout" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
-                    <Border Background="#14FFFFFF" CornerRadius="8" Padding="16" Margin="0,0,0,16">
-                        <StackPanel>
-                            <CheckBox x:Name="CompactModeCheckBox" Content="Compact Mode" ToolTip="Scales the whole app down — handy on small or low-resolution screens." Checked="CompactModeCheckBox_Changed" Unchecked="CompactModeCheckBox_Changed"/>
-                            <TextBlock Margin="0,4,0,0" FontSize="11" Opacity="0.6" TextWrapping="Wrap"
-                                       Text="Shrinks spacing and text throughout the app. Good fit for smaller or lower-resolution screens."/>
-                        </StackPanel>
-                    </Border>
-
-                    <TextBlock Text="Startup &amp; Shortcuts" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
-                    <Border Background="#14FFFFFF" CornerRadius="8" Padding="16" Margin="0,0,0,16">
-                        <StackPanel>
-                            <CheckBox x:Name="StartWithWindowsCheckBox" Content="Start RAM Savior when Windows starts" ToolTip="Launches RAM Savior automatically at sign-in via a Scheduled Task." Checked="StartupSetting_Changed" Unchecked="StartupSetting_Changed"/>
-                            <TextBlock Margin="0,4,0,10" FontSize="11" Opacity="0.6" TextWrapping="Wrap"
-                                       Text="Uses a Scheduled Task (not a registry entry) so elevation works correctly, since this app requires admin."/>
-
-                            <CheckBox x:Name="GlobalHotkeyCheckBox" Content="Enable global hotkey: Ctrl+Alt+R" ToolTip="Runs a quick clean from anywhere on your PC, even in a full-screen game." Checked="StartupSetting_Changed" Unchecked="StartupSetting_Changed"/>
-                            <TextBlock Margin="0,4,0,0" FontSize="11" Opacity="0.6" TextWrapping="Wrap"
-                                       Text="Triggers a Normal/Moderate clean (whichever is selected) from anywhere, even while gaming. Not customizable yet — fixed combination for now."/>
-                        </StackPanel>
-                    </Border>
-
-                    <TextBlock Text="Danger Zone" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
-                    <Border BorderBrush="#E5484D" BorderThickness="1" CornerRadius="8" Padding="16">
-                        <StackPanel>
-                            <TextBlock Text="Reset RAM Savior" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                            <TextBlock Opacity="0.7" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"
-                                       Text="Turns off automation, removes the startup task and global hotkey, and deletes all saved settings and history. The app keeps running with defaults — this doesn't uninstall anything."/>
-                            <ui:Button Content="Reset Everything" Appearance="Danger" ToolTip="Deletes all saved settings and history and turns automation off. Cannot be undone." Click="ResetButton_Click"/>
-                        </StackPanel>
-                    </Border>
-
+            <TextBlock Text="Appearance" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+            <Border Background="#14FFFFFF" CornerRadius="8" Padding="16" Margin="0,0,0,16">
+                <StackPanel>
+                    <RadioButton x:Name="SystemThemeRadio" Content="Follow system" GroupName="Theme" ToolTip="Matches whatever Windows itself is set to, light or dark." Checked="ThemeRadio_Checked"/>
+                    <RadioButton x:Name="LightThemeRadio" Content="Light" GroupName="Theme" Margin="0,6,0,0" ToolTip="Always use the light appearance, regardless of Windows settings." Checked="ThemeRadio_Checked"/>
+                    <RadioButton x:Name="DarkThemeRadio" Content="Dark" GroupName="Theme" Margin="0,6,0,0" ToolTip="Always use the dark appearance, regardless of Windows settings." Checked="ThemeRadio_Checked"/>
+                    <TextBlock Margin="0,4,0,0" FontSize="10" Opacity="0.5" TextWrapping="Wrap"
+                               Text="The sun/moon icon at the top of the main window is a quicker Light/Dark shortcut for day-to-day use."/>
                 </StackPanel>
+            </Border>
 
-                <!-- RIGHT: Automation (the big one) + Advanced/Experimental note -->
-                <StackPanel Grid.Column="2">
+            <TextBlock Text="Accent Color" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+            <ItemsControl x:Name="AccentSwatches" Margin="0,0,0,16">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
 
-                    <TextBlock Text="Automation" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
-                    <Border x:Name="AutomationCard" Background="#14FFFFFF" CornerRadius="8" Padding="16" Margin="0,0,0,16">
-                        <StackPanel>
-                            <CheckBox x:Name="AutomationEnabledCheckBox" Content="Enable automatic cleaning"
-                                      ToolTip="Turns background automation on or off. Cleans according to the trigger conditions and item selection below."
-                                      Checked="AutomationSetting_Changed" Unchecked="AutomationSetting_Changed"/>
-                            <TextBlock Margin="0,4,0,12" FontSize="11" Opacity="0.6" TextWrapping="Wrap"
-                                       Text="Runs in the background even when the window is closed (look for the tray icon)."/>
-
-                            <Separator Margin="0,0,0,10"/>
-
-                            <TextBlock Text="What automation cleans" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
-
-                            <RadioButton x:Name="AutoTierNormalRadio" Content="Normal (recommended)" GroupName="AutoTier"
-                                         ToolTip="Targets low-reuse standby cache only. Minimal disk-reload risk. Safe default for unattended runs."
-                                         Checked="AutomationTierRadio_Checked"/>
-                            <RadioButton x:Name="AutoTierModerateRadio" Content="Moderate" GroupName="AutoTier" Margin="0,6,0,0"
-                                         ToolTip="Also flushes working sets for a bit more freed memory. Still low risk."
-                                         Checked="AutomationTierRadio_Checked"/>
-                            <RadioButton x:Name="AutoTierCustomRadio" Content="Custom — pick exactly" GroupName="AutoTier" Margin="0,6,0,0"
-                                         ToolTip="Choose exactly which cleanup actions run unattended, including options that may briefly affect responsiveness."
-                                         Checked="AutomationTierRadio_Checked"/>
-                            <TextBlock x:Name="AutoTierCustomLockedText" Margin="20,4,0,0" FontSize="10" Opacity="0.8" TextWrapping="Wrap"
-                                       Foreground="#E5A21A" Visibility="Collapsed"
-                                       Text="Switch the main window's Mode to Advanced or Experimental to unlock Custom automation items."/>
-
-                            <Border x:Name="AutoCustomPanel" Background="#0DFFFFFF" CornerRadius="6" Padding="12" Margin="0,10,0,0" Visibility="Collapsed">
-                                <StackPanel x:Name="AutoCustomItemsPanel"/>
-                            </Border>
-
-                            <Separator Margin="0,10,0,10"/>
-
-                            <TextBlock Text="Trigger conditions (any enabled condition can fire a clean)" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
-
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="16"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-
-                                <StackPanel Grid.Column="0">
-                                    <CheckBox x:Name="IntervalEnabledCheckBox" Content="Every" ToolTip="Clean on a fixed timer, regardless of memory pressure." Checked="AutomationSetting_Changed" Unchecked="AutomationSetting_Changed"/>
-                                    <Grid Margin="20,4,0,10">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="70"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox Grid.Column="0" x:Name="IntervalMinutesBox" LostFocus="AutomationSetting_Changed"/>
-                                        <TextBlock Grid.Column="1" Text="minutes" VerticalAlignment="Center" Margin="8,0,0,0" Opacity="0.6" FontSize="11"/>
-                                    </Grid>
-
-                                    <CheckBox x:Name="FreeMemThresholdCheckBox" Content="Free memory drops below" ToolTip="Clean as soon as available RAM falls under this amount." Checked="AutomationSetting_Changed" Unchecked="AutomationSetting_Changed"/>
-                                    <Grid Margin="20,4,0,10">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="70"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox Grid.Column="0" x:Name="FreeMemGbBox" LostFocus="AutomationSetting_Changed"/>
-                                        <TextBlock Grid.Column="1" Text="GB" VerticalAlignment="Center" Margin="8,0,0,0" Opacity="0.6" FontSize="11"/>
-                                    </Grid>
-
-                                    <CheckBox x:Name="LoadPercentThresholdCheckBox" Content="Memory load exceeds" ToolTip="Clean once overall memory usage crosses this percentage." Checked="AutomationSetting_Changed" Unchecked="AutomationSetting_Changed"/>
-                                    <Grid Margin="20,4,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="70"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox Grid.Column="0" x:Name="LoadPercentBox" LostFocus="AutomationSetting_Changed"/>
-                                        <TextBlock Grid.Column="1" Text="%" VerticalAlignment="Center" Margin="8,0,0,0" Opacity="0.6" FontSize="11"/>
-                                    </Grid>
-                                </StackPanel>
-
-                                <StackPanel Grid.Column="2">
-                                    <CheckBox x:Name="StandbyThresholdCheckBox" Content="Standby cache exceeds" ToolTip="Only clean once there's meaningful reclaimable cache built up — avoids pointless purges." Checked="AutomationSetting_Changed" Unchecked="AutomationSetting_Changed"/>
-                                    <TextBlock Margin="20,2,0,4" FontSize="10" Opacity="0.5" TextWrapping="Wrap"
-                                               Text="The ISLC-style condition: purges only when there's meaningful reclaimable cache."/>
-                                    <Grid Margin="20,0,0,10">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="70"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox Grid.Column="0" x:Name="StandbyMbBox" LostFocus="AutomationSetting_Changed"/>
-                                        <TextBlock Grid.Column="1" Text="MB" VerticalAlignment="Center" Margin="8,0,0,0" Opacity="0.6" FontSize="11"/>
-                                    </Grid>
-
-                                    <CheckBox x:Name="TimeOfDayCheckBox" Content="Also clean once daily at" ToolTip="Runs one extra guaranteed clean at this time every day." Checked="AutomationSetting_Changed" Unchecked="AutomationSetting_Changed"/>
-                                    <Grid Margin="20,4,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="70"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox Grid.Column="0" x:Name="TimeOfDayBox" LostFocus="AutomationSetting_Changed"/>
-                                        <TextBlock Grid.Column="1" Text="24h, e.g. 03:00" VerticalAlignment="Center" Margin="8,0,0,0" Opacity="0.6" FontSize="11"/>
-                                    </Grid>
-                                </StackPanel>
-                            </Grid>
-
-                            <Separator Margin="0,10,0,10"/>
-
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="16"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-
-                                <StackPanel Grid.Column="0">
-                                    <CheckBox x:Name="PerProcessAutoTrimCheckBox" Content="Auto-trim any process using more than" ToolTip="Trims any single app's working set once it crosses this size, independent of the system-wide conditions above." Checked="AutomationSetting_Changed" Unchecked="AutomationSetting_Changed"/>
-                                    <TextBlock Margin="20,2,0,4" FontSize="10" Opacity="0.5" TextWrapping="Wrap"
-                                               Text="Checked every 30 seconds, independent of the conditions above."/>
-                                    <Grid Margin="20,0,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="70"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox Grid.Column="0" x:Name="PerProcessMbBox" LostFocus="AutomationSetting_Changed"/>
-                                        <TextBlock Grid.Column="1" Text="MB" VerticalAlignment="Center" Margin="8,0,0,0" Opacity="0.6" FontSize="11"/>
-                                    </Grid>
-                                </StackPanel>
-
-                                <StackPanel Grid.Column="2">
-                                    <TextBlock Text="Only clean when idle for" FontSize="11" Margin="0,0,0,4"/>
-                                    <Grid Margin="0,0,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="70"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox Grid.Column="0" x:Name="IdleMinutesBox" ToolTip="Only clean once you've been away from the keyboard/mouse this long. 0 disables the idle requirement." LostFocus="AutomationSetting_Changed"/>
-                                        <TextBlock Grid.Column="1" Text="min (0 = off)" VerticalAlignment="Center" Margin="8,0,0,0" Opacity="0.6" FontSize="11"/>
-                                    </Grid>
-                                </StackPanel>
-                            </Grid>
-
-                            <Separator Margin="0,10,0,10"/>
-
-                            <TextBlock Text="Pause automation while these apps are running (comma-separated process names, no .exe)" FontSize="11" Margin="0,0,0,4" TextWrapping="Wrap"/>
-                            <TextBox x:Name="ExcludedProcessesBox" ToolTip="Automation is fully paused while any app in this list is running — e.g. games, video editors, anything sensitive to a brief stutter." LostFocus="AutomationSetting_Changed"/>
-                        </StackPanel>
-                    </Border>
-
-                    <TextBlock Text="Advanced &amp; Experimental" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
-                    <Border Background="#14FFFFFF" CornerRadius="8" Padding="16">
-                        <StackPanel>
-                            <TextBlock Text="Controlled from the main window now" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                            <TextBlock Opacity="0.7" FontSize="11" TextWrapping="Wrap"
-                                       Text="Use the Mode dropdown at the top of the main window to switch between Normal, Advanced, and Experimental — it reveals the checkbox picker, Focus Mode, and per-process tools directly, instead of a separate toggle here. Advanced/Experimental also unlocks the Custom automation items above."/>
-                        </StackPanel>
-                    </Border>
-
+            <TextBlock Text="Layout" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+            <Border Background="#14FFFFFF" CornerRadius="8" Padding="16" Margin="0,0,0,16">
+                <StackPanel>
+                    <CheckBox x:Name="CompactModeCheckBox" Content="Compact Mode" ToolTip="Scales the whole app down — handy on small or low-resolution screens." Checked="CompactModeCheckBox_Changed" Unchecked="CompactModeCheckBox_Changed"/>
+                    <TextBlock Margin="0,4,0,10" FontSize="11" Opacity="0.6" TextWrapping="Wrap"
+                               Text="Shrinks spacing and text throughout the app. Good fit for smaller or lower-resolution screens."/>
+                    <TextBlock FontSize="11" Opacity="0.6" TextWrapping="Wrap"
+                               Text="Which sections appear on the main window, and (in Experimental mode) their drag-and-drop arrangement, are handled by the Layout icon on the main window itself, not here."/>
                 </StackPanel>
-            </Grid>
+            </Border>
+
+            <TextBlock Text="Startup &amp; Shortcuts" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+            <Border Background="#14FFFFFF" CornerRadius="8" Padding="16" Margin="0,0,0,16">
+                <StackPanel>
+                    <CheckBox x:Name="StartWithWindowsCheckBox" Content="Start RAM Savior when Windows starts" ToolTip="Launches RAM Savior automatically at sign-in via a Scheduled Task." Checked="StartupSetting_Changed" Unchecked="StartupSetting_Changed"/>
+                    <TextBlock Margin="0,4,0,10" FontSize="11" Opacity="0.6" TextWrapping="Wrap"
+                               Text="Uses a Scheduled Task (not a registry entry) so elevation works correctly, since this app requires admin."/>
+
+                    <CheckBox x:Name="GlobalHotkeyCheckBox" Content="Enable global hotkey: Ctrl+Alt+R" ToolTip="Runs a quick clean from anywhere on your PC, even in a full-screen game." Checked="StartupSetting_Changed" Unchecked="StartupSetting_Changed"/>
+                    <TextBlock Margin="0,4,0,0" FontSize="11" Opacity="0.6" TextWrapping="Wrap"
+                               Text="Triggers a Normal/Moderate clean (whichever is selected on the main window) from anywhere, even while gaming. Not customizable yet — fixed combination for now."/>
+                </StackPanel>
+            </Border>
+
+            <TextBlock Text="About Modes" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+            <Border Background="#14FFFFFF" CornerRadius="8" Padding="16" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="Controlled from the main window" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                    <TextBlock Opacity="0.7" FontSize="11" TextWrapping="Wrap"
+                               Text="Use the Mode dropdown at the top of the main window to switch between Normal, Advanced, and Experimental — it reveals the checkbox picker, Focus Mode, per-process tools, and the custom drag-and-drop layout directly. The wrench icon opens Automation Configuration, a dedicated window for everything about background cleaning."/>
+                </StackPanel>
+            </Border>
+
+            <TextBlock Text="Danger Zone" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+            <Border BorderBrush="#E5484D" BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel>
+                    <TextBlock Text="Reset RAM Savior" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                    <TextBlock Opacity="0.7" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"
+                               Text="Turns off automation, removes the startup task and global hotkey, and deletes all saved settings and history. The app keeps running with defaults — this doesn't uninstall anything."/>
+                    <ui:Button Content="Reset Everything" Appearance="Danger" ToolTip="Deletes all saved settings and history and turns automation off. Cannot be undone." Click="ResetButton_Click"/>
+                </StackPanel>
+            </Border>
 
             <TextBlock x:Name="StatusText" Margin="0,16,0,0" Opacity="0.6" FontSize="11"/>
 

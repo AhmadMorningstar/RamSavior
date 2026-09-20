@@ -107,4 +107,38 @@ public class MainLayoutSettings
     public bool ShowClean { get; set; } = true;
     public bool ShowFocusMode { get; set; } = true;
     public bool ShowPerProcessTrim { get; set; } = true;
+
+    /// <summary>
+    /// Only meaningful in Experimental mode. False (default) = sections automatically
+    /// reflow to fill whatever space is available (a WrapPanel — hiding a section simply
+    /// closes the gap). True = the user has opted into a hand-arranged 3x2 grid of slots
+    /// they can drag sections between and resize with splitters, à la a docking IDE.
+    /// </summary>
+    public bool UseCustomArrangement { get; set; } = false;
+
+    /// <summary>Which of the 6 grid slots (0-5, reading left-to-right then top-to-bottom)
+    /// each section currently occupies in the custom arrangement. A section key missing
+    /// from this map is auto-assigned the next free slot.</summary>
+    public Dictionary<string, int> SlotAssignment { get; set; } = new();
+
+    /// <summary>Relative column widths for the 3-column slot grid, adjusted by dragging
+    /// the vertical splitters. Star-sized, so only relative to each other.</summary>
+    public double[] ColumnWeights { get; set; } = { 1, 1, 1 };
+
+    /// <summary>Relative row heights for the 2-row slot grid, adjusted by dragging the
+    /// horizontal splitter.</summary>
+    public double[] RowWeights { get; set; } = { 1, 1 };
+
+    /// <summary>Named custom arrangements the user has explicitly saved via "Save Current
+    /// As..." in the Layout window, so they can switch between a couple of favorite
+    /// setups instead of only ever having the one currently on screen.</summary>
+    public Dictionary<string, SavedArrangement> SavedArrangements { get; set; } = new();
+}
+
+/// <summary>A snapshot of slot positions/sizes saved under a name via the Layout window.</summary>
+public class SavedArrangement
+{
+    public Dictionary<string, int> SlotAssignment { get; set; } = new();
+    public double[] ColumnWeights { get; set; } = { 1, 1, 1 };
+    public double[] RowWeights { get; set; } = { 1, 1 };
 }

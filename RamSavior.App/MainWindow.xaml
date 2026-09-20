@@ -32,7 +32,7 @@
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
                     <TextBlock Text="Mode" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,10,0"/>
                     <ComboBox x:Name="UiModeComboBox" Width="160"
-                              ToolTip="Normal: safe automation-friendly cleaning. Advanced: full manual control. Experimental: adds newer per-process and Focus Mode tools."
+                              ToolTip="Normal: safe automation-friendly cleaning. Advanced: full manual control. Experimental: adds newer per-process, Focus Mode, and layout-arranging tools."
                               SelectionChanged="UiModeComboBox_SelectionChanged">
                         <ComboBoxItem Content="Normal"/>
                         <ComboBoxItem Content="Advanced"/>
@@ -46,7 +46,7 @@
                                Icon="{ui:SymbolIcon Symbol=Grid24}"
                                Appearance="Secondary"
                                Width="32" Height="32" Padding="0" Margin="0,0,6,0"
-                               ToolTip="Layout — choose which sections appear on the main window"
+                               ToolTip="Layout — choose which sections appear, and (Experimental) drag them into a custom arrangement"
                                Visibility="Collapsed"
                                Click="LayoutButton_Click"/>
                     <ui:Button x:Name="ThemeToggleButton"
@@ -59,7 +59,7 @@
                                Icon="{ui:SymbolIcon Symbol=Wrench24}"
                                Appearance="Secondary"
                                Width="32" Height="32" Padding="0" Margin="0,0,6,0"
-                               ToolTip="Automation Configuration — set up when and what automation cleans"
+                               ToolTip="Automation Configuration — everything about when and what automation cleans, in one dedicated window"
                                Click="AutomationConfigButton_Click"/>
                     <ui:Button x:Name="HistoryButton"
                                Icon="{ui:SymbolIcon Symbol=History24}"
@@ -71,240 +71,283 @@
                                Icon="{ui:SymbolIcon Symbol=Settings24}"
                                Appearance="Secondary"
                                Width="32" Height="32" Padding="0"
-                               ToolTip="Settings — appearance, startup, and automation"
+                               ToolTip="Settings — appearance, startup, and the Danger Zone"
                                Click="SettingsButton_Click"/>
                 </StackPanel>
             </Grid>
 
-            <!-- Adaptive multi-column body -->
+            <!-- BODY: exactly one of these two is visible at a time -->
             <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="320"/>
-                    <ColumnDefinition Width="24"/>
-                    <ColumnDefinition Width="420"/>
-                    <ColumnDefinition x:Name="ExperimentalGutterColumn" Width="0"/>
-                    <ColumnDefinition x:Name="ExperimentalColumn" Width="0"/>
-                </Grid.ColumnDefinitions>
 
-                <!-- LEFT: status, insights, automation -->
-                <StackPanel Grid.Column="0">
+                <!-- Automatic layout: sections just flow and reflow to fill available space -->
+                <WrapPanel x:Name="FlowLayoutPanel" Orientation="Horizontal"/>
 
-                    <StackPanel x:Name="MemoryStatusSection">
-                        <TextBlock Text="Memory Status" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
-                        <Border Background="#14FFFFFF" CornerRadius="8" Padding="16" Margin="0,0,0,16">
-                            <StackPanel>
-                                <TextBlock x:Name="AvailableText" Text="-- GB available" FontSize="26" FontWeight="Bold"/>
-                                <TextBlock x:Name="TotalText" Text="of -- GB total" Opacity="0.6" Margin="0,0,0,12"/>
-                                <ProgressBar x:Name="LoadBar" Minimum="0" Maximum="100" Value="0" Height="8"
-                                             ToolTip="Current overall memory load"/>
-                                <TextBlock x:Name="LoadPercentText" Text="0% memory load" Margin="0,4,0,12" Opacity="0.6"/>
+                <!-- Custom (Experimental) layout: a hand-arranged 3x2 grid of slots. Section
+                     headers are dragged between slots; the thin bars between slots are
+                     GridSplitters for resizing. Populated/managed entirely in code-behind. -->
+                <Grid x:Name="CustomLayoutGrid" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition x:Name="SlotCol0" Width="1*"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition x:Name="SlotCol1" Width="1*"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition x:Name="SlotCol2" Width="1*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition x:Name="SlotRow0" Height="1*"/>
+                        <RowDefinition Height="8"/>
+                        <RowDefinition x:Name="SlotRow1" Height="1*"/>
+                    </Grid.RowDefinitions>
 
-                                <TextBlock Text="Composition" FontSize="11" FontWeight="SemiBold" Opacity="0.6" Margin="0,0,0,4"/>
-                                <Border CornerRadius="4" Height="14" ClipToBounds="True"
-                                        ToolTip="How physical memory is currently divided: active, standby cache, modified, free, and zeroed">
-                                    <Grid x:Name="CompositionBar"/>
-                                </Border>
-                                <TextBlock x:Name="CompositionLegendText" Margin="0,6,0,0" FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
+                    <Border x:Name="Slot0" Grid.Row="0" Grid.Column="0" Margin="0,0,8,8" Padding="2" MinHeight="120"
+                            AllowDrop="True" Drop="Slot_Drop" DragEnter="Slot_DragEnter" DragLeave="Slot_DragLeave" DragOver="Slot_DragOver"/>
+                    <Border x:Name="Slot1" Grid.Row="0" Grid.Column="2" Margin="0,0,8,8" Padding="2" MinHeight="120"
+                            AllowDrop="True" Drop="Slot_Drop" DragEnter="Slot_DragEnter" DragLeave="Slot_DragLeave" DragOver="Slot_DragOver"/>
+                    <Border x:Name="Slot2" Grid.Row="0" Grid.Column="4" Margin="0,0,0,8" Padding="2" MinHeight="120"
+                            AllowDrop="True" Drop="Slot_Drop" DragEnter="Slot_DragEnter" DragLeave="Slot_DragLeave" DragOver="Slot_DragOver"/>
+                    <Border x:Name="Slot3" Grid.Row="2" Grid.Column="0" Margin="0,0,8,0" Padding="2" MinHeight="120"
+                            AllowDrop="True" Drop="Slot_Drop" DragEnter="Slot_DragEnter" DragLeave="Slot_DragLeave" DragOver="Slot_DragOver"/>
+                    <Border x:Name="Slot4" Grid.Row="2" Grid.Column="2" Margin="0,0,8,0" Padding="2" MinHeight="120"
+                            AllowDrop="True" Drop="Slot_Drop" DragEnter="Slot_DragEnter" DragLeave="Slot_DragLeave" DragOver="Slot_DragOver"/>
+                    <Border x:Name="Slot5" Grid.Row="2" Grid.Column="4" Margin="0,0,0,0" Padding="2" MinHeight="120"
+                            AllowDrop="True" Drop="Slot_Drop" DragEnter="Slot_DragEnter" DragLeave="Slot_DragLeave" DragOver="Slot_DragOver"/>
 
-                    <StackPanel x:Name="InsightsSection">
-                        <TextBlock Text="Insights" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
-                        <Border Background="#14FFFFFF" CornerRadius="8" Padding="16" Margin="0,0,0,16">
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                    <ui:Button x:Name="InsightsStatusTabButton" Content="Status" Appearance="Primary" FontSize="11" Padding="10,4" Margin="0,0,6,0"
-                                               ToolTip="Top memory users right now" Click="InsightsTab_Click"/>
-                                    <ui:Button x:Name="InsightsHistoryTabButton" Content="History" Appearance="Secondary" FontSize="11" Padding="10,4" Margin="0,0,6,0"
-                                               ToolTip="The last few cleaning runs" Click="InsightsTab_Click"/>
-                                    <ui:Button x:Name="InsightsLastCleanedTabButton" Content="Last Cleaned" Appearance="Secondary" FontSize="11" Padding="10,4"
-                                               ToolTip="Details of the most recent clean" Click="InsightsTab_Click"/>
-                                </StackPanel>
-                                <StackPanel x:Name="InsightsContentPanel"/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-
-                    <StackPanel x:Name="AutomationSection">
-                        <TextBlock Text="Automation" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
-                        <Border Background="#14FFFFFF" CornerRadius="8" Padding="16">
-                            <StackPanel>
-                                <CheckBox x:Name="AutomationQuickToggle" Content="Clean automatically"
-                                          ToolTip="Turns background automation on or off using the conditions and items set in Configure."
-                                          Checked="AutomationQuickToggle_Changed" Unchecked="AutomationQuickToggle_Changed"/>
-                                <TextBlock x:Name="AutomationSummaryText" Margin="0,4,0,8" FontSize="11" Opacity="0.6" TextWrapping="Wrap"/>
-                                <ui:Button Content="Configure" Appearance="Secondary" HorizontalAlignment="Left"
-                                           ToolTip="Set triggers and, in Advanced/Experimental mode, exactly which items automation cleans"
-                                           Click="ConfigureAutomationButton_Click"/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-
-                </StackPanel>
-
-                <!-- MIDDLE: clean actions -->
-                <StackPanel Grid.Column="2" x:Name="CleanSection">
-                    <TextBlock Text="Clean" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
-
-                    <Border Background="#14FFFFFF" CornerRadius="8" Padding="16" Margin="0,0,0,8">
-                        <StackPanel>
-                            <RadioButton x:Name="NormalModeRadio" Content="Normal (recommended)" IsChecked="True" GroupName="CleanTier"
-                                         ToolTip="Targets low-reuse standby cache only. Minimal disk-reload risk. Safe default."
-                                         Checked="CleanTierRadio_Checked"/>
-                            <TextBlock Text="Targets low-reuse standby cache only. Minimal disk-reload risk. Safe default for automation." Opacity="0.6" FontSize="11" Margin="20,2,0,10" TextWrapping="Wrap"/>
-
-                            <RadioButton x:Name="ModerateModeRadio" Content="Moderate" GroupName="CleanTier"
-                                         ToolTip="Also flushes working sets for a bit more freed memory. Still low risk."
-                                         Checked="CleanTierRadio_Checked"/>
-                            <TextBlock Text="Also flushes working sets for a bit more freed memory. Still low risk." Opacity="0.6" FontSize="11" Margin="20,2,0,0" TextWrapping="Wrap"/>
-
-                            <StackPanel x:Name="CustomTierOption" Visibility="Collapsed">
-                                <RadioButton x:Name="CustomModeRadio" Content="Custom — pick exactly" GroupName="CleanTier" Margin="0,10,0,0"
-                                             ToolTip="Choose exactly which cleanup actions run right now."
-                                             Checked="CleanTierRadio_Checked"/>
-                                <TextBlock Text="Pick exactly which cleanup actions run, including options that may briefly affect responsiveness." Opacity="0.6" FontSize="11" Margin="20,2,0,0" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </Border>
-
-                    <Border x:Name="CustomPanel" Background="#14FFFFFF" CornerRadius="8" Padding="16" Margin="0,0,0,8" Visibility="Collapsed">
-                        <StackPanel x:Name="CustomItemsPanel"/>
-                    </Border>
-
-                    <CheckBox x:Name="DryRunCheckBox" Content="Dry run (show what would happen, change nothing)" Margin="0,4,0,4"
-                              ToolTip="Preview which actions would run and how much might be freed, without touching memory."/>
-
-                    <ui:Button x:Name="CleanButton"
-                               Content="Purge Memory Now"
-                               Appearance="Primary"
-                               Icon="{ui:SymbolIcon Symbol=Broom24}"
-                               Height="44"
-                               FontWeight="SemiBold"
-                               Margin="0,4,0,0"
-                               ToolTip="Run the cleanup tier selected above right now"
-                               Click="CleanButton_Click"/>
-
-                    <TextBlock x:Name="ResultText" Margin="0,12,0,0" TextWrapping="Wrap" Opacity="0.8"/>
-                </StackPanel>
-
-                <!-- RIGHT: Experimental-only tools, given a real column instead of stacking below -->
-                <StackPanel Grid.Column="4" x:Name="ExperimentalArea" Visibility="Collapsed">
-
-                    <StackPanel x:Name="FocusModeSection">
-                        <Grid Margin="0,0,0,8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Focus Mode" FontSize="14" FontWeight="SemiBold" Opacity="0.7" VerticalAlignment="Center"/>
-                            <Border Grid.Column="1" Background="#E5484D" CornerRadius="4" Padding="6,1,6,1">
-                                <TextBlock Text="EXPERIMENTAL" FontSize="9" FontWeight="Bold" Foreground="White"/>
-                            </Border>
-                        </Grid>
-
-                        <Border Background="#14FFFFFF" CornerRadius="8" Padding="16" Margin="0,0,0,20">
-                            <StackPanel>
-                                <TextBlock Text="Pick apps to protect — everything else gets trimmed repeatedly while this runs." FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,10"/>
-
-                                <Grid Margin="0,0,0,4">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBox Grid.Column="0" x:Name="FocusSearchBox" Margin="0,0,8,0"
-                                             ToolTip="Filter the list below by app name" TextChanged="FocusSearchBox_TextChanged"/>
-                                    <ui:Button Grid.Column="1" x:Name="DeselectAllFocusButton"
-                                               Icon="{ui:SymbolIcon Symbol=Eraser24}"
-                                               Appearance="Secondary" Width="32" Height="32" Padding="0"
-                                               ToolTip="Deselect all protected apps"
-                                               Click="DeselectAllFocusButton_Click"/>
-                                </Grid>
-                                <TextBlock Text="Right-click a name to protect it, left-click to remove it. Type above to search." FontSize="10" Opacity="0.5" Margin="0,0,0,8" TextWrapping="Wrap"/>
-
-                                <Grid Margin="0,0,0,8">
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition x:Name="FocusListRow" Height="180"/>
-                                        <RowDefinition Height="Auto"/>
-                                    </Grid.RowDefinitions>
-                                    <Border Grid.Row="0" BorderBrush="#33FFFFFF" BorderThickness="1" CornerRadius="4,4,0,0">
-                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                            <StackPanel x:Name="FocusKeepPanel" Margin="8"/>
-                                        </ScrollViewer>
-                                    </Border>
-                                    <Thumb Grid.Row="1" x:Name="FocusListResizeThumb"
-                                           Height="8" Cursor="SizeNS" Background="#22FFFFFF"
-                                           HorizontalAlignment="Stretch"
-                                           ToolTip="Drag to resize the protected-apps list"
-                                           DragDelta="FocusListResizeThumb_DragDelta"
-                                           DragCompleted="FocusListResizeThumb_DragCompleted"/>
-                                </Grid>
-
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                    <ui:Button Content="Add Folder..." Appearance="Secondary" FontSize="11" Margin="0,0,8,0"
-                                               ToolTip="Protect every .exe found directly inside a folder" Click="AddFocusFolderButton_Click"/>
-                                    <ui:Button Content="Add File..." Appearance="Secondary" FontSize="11" Margin="0,0,8,0"
-                                               ToolTip="Protect a single chosen .exe" Click="AddFocusFileButton_Click"/>
-                                    <ui:Button Icon="{ui:SymbolIcon Symbol=ArrowSync24}" Appearance="Secondary" Width="32" Padding="0"
-                                               ToolTip="Refresh the list of running apps" Click="RefreshFocusListButton_Click"/>
-                                </StackPanel>
-
-                                <ui:Button x:Name="FocusModeToggleButton" Content="Start Focus Mode" Appearance="Primary" Height="40"
-                                           ToolTip="Repeatedly trims everything except the apps you've protected above"
-                                           Click="FocusModeToggleButton_Click"/>
-                                <TextBlock x:Name="FocusModeStatusText" Margin="0,8,0,0" FontSize="11" Opacity="0.8" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-
-                    <StackPanel x:Name="PerProcessTrimSection">
-                        <Grid Margin="0,0,0,8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Per-Process Trim" FontSize="14" FontWeight="SemiBold" Opacity="0.7" VerticalAlignment="Center"/>
-                            <Border Grid.Column="1" Background="#E5484D" CornerRadius="4" Padding="6,1,6,1">
-                                <TextBlock Text="EXPERIMENTAL" FontSize="9" FontWeight="Bold" Foreground="White"/>
-                            </Border>
-                        </Grid>
-
-                        <Border Background="#14FFFFFF" CornerRadius="8" Padding="16">
-                            <StackPanel>
-                                <TextBlock Text="Trim a specific process" FontWeight="SemiBold" Margin="0,0,0,2"/>
-                                <TextBlock Text="Uses the official Windows EmptyWorkingSet API on one chosen app instead of purging system-wide." Opacity="0.6" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"/>
-
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <ComboBox Grid.Column="0" x:Name="ProcessComboBox" Margin="0,0,8,0"
-                                              ToolTip="Choose a running process to trim"/>
-                                    <ui:Button Grid.Column="1" x:Name="RefreshProcessesButton"
-                                               Icon="{ui:SymbolIcon Symbol=ArrowSync24}"
-                                               Appearance="Secondary" Width="36" Height="36" Padding="0"
-                                               ToolTip="Refresh the process list"
-                                               Click="RefreshProcessesButton_Click"/>
-                                </Grid>
-
-                                <ui:Button x:Name="TrimProcessButton"
-                                           Content="Trim Selected Process"
-                                           Appearance="Secondary"
-                                           Height="36"
-                                           Margin="0,10,0,0"
-                                           ToolTip="Empties the working set of the selected process only"
-                                           Click="TrimProcessButton_Click"/>
-
-                                <TextBlock x:Name="ExperimentalResultText" Margin="0,8,0,0" FontSize="11" TextWrapping="Wrap" Opacity="0.8"/>
-                                <TextBlock x:Name="LeakSuspectsText" Margin="0,8,0,0" FontSize="11" TextWrapping="Wrap" Opacity="0.8" Foreground="#E5A21A"/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-
-                </StackPanel>
+                    <GridSplitter Grid.Row="0" Grid.RowSpan="3" Grid.Column="1" Width="8" HorizontalAlignment="Stretch"
+                                   Background="#22FFFFFF" ToolTip="Drag to resize these columns" DragCompleted="SlotSplitter_DragCompleted"/>
+                    <GridSplitter Grid.Row="0" Grid.RowSpan="3" Grid.Column="3" Width="8" HorizontalAlignment="Stretch"
+                                   Background="#22FFFFFF" ToolTip="Drag to resize these columns" DragCompleted="SlotSplitter_DragCompleted"/>
+                    <GridSplitter Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="5" Height="8" HorizontalAlignment="Stretch"
+                                   Background="#22FFFFFF" ToolTip="Drag to resize these rows" DragCompleted="SlotSplitter_DragCompleted"/>
+                </Grid>
 
             </Grid>
+
+            <!-- ===== Section definitions (reparented into FlowLayoutPanel or a Slot by code) ===== -->
+
+            <StackPanel x:Name="MemoryStatusSection" Width="320" Margin="0,0,16,16" Visibility="Collapsed">
+                <TextBlock Text="Memory Status" Tag="MemoryStatus" Cursor="Hand"
+                           MouseLeftButtonDown="SectionHeader_MouseLeftButtonDown"
+                           ToolTip="Drag here to reposition (Experimental Custom arrangement only)"
+                           FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+                <Border Background="#14FFFFFF" CornerRadius="8" Padding="16">
+                    <StackPanel>
+                        <TextBlock x:Name="AvailableText" Text="-- GB available" FontSize="26" FontWeight="Bold"/>
+                        <TextBlock x:Name="TotalText" Text="of -- GB total" Opacity="0.6" Margin="0,0,0,12"/>
+                        <ProgressBar x:Name="LoadBar" Minimum="0" Maximum="100" Value="0" Height="8"
+                                     ToolTip="Current overall memory load"/>
+                        <TextBlock x:Name="LoadPercentText" Text="0% memory load" Margin="0,4,0,12" Opacity="0.6"/>
+
+                        <TextBlock Text="Composition" FontSize="11" FontWeight="SemiBold" Opacity="0.6" Margin="0,0,0,4"/>
+                        <Border CornerRadius="4" Height="14" ClipToBounds="True"
+                                ToolTip="How physical memory is currently divided: active, standby cache, modified, free, and zeroed">
+                            <Grid x:Name="CompositionBar"/>
+                        </Border>
+                        <TextBlock x:Name="CompositionLegendText" Margin="0,6,0,0" FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <StackPanel x:Name="InsightsSection" Width="320" Margin="0,0,16,16" Visibility="Collapsed">
+                <TextBlock Text="Insights" Tag="Insights" Cursor="Hand"
+                           MouseLeftButtonDown="SectionHeader_MouseLeftButtonDown"
+                           ToolTip="Drag here to reposition (Experimental Custom arrangement only)"
+                           FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+                <Border Background="#14FFFFFF" CornerRadius="8" Padding="16">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <ui:Button x:Name="InsightsStatusTabButton" Content="Status" Appearance="Primary" FontSize="11" Padding="10,4" Margin="0,0,6,0"
+                                       ToolTip="Top memory users right now" Click="InsightsTab_Click"/>
+                            <ui:Button x:Name="InsightsHistoryTabButton" Content="History" Appearance="Secondary" FontSize="11" Padding="10,4" Margin="0,0,6,0"
+                                       ToolTip="The last few cleaning runs" Click="InsightsTab_Click"/>
+                            <ui:Button x:Name="InsightsLastCleanedTabButton" Content="Last Cleaned" Appearance="Secondary" FontSize="11" Padding="10,4"
+                                       ToolTip="Details of the most recent clean" Click="InsightsTab_Click"/>
+                        </StackPanel>
+                        <StackPanel x:Name="InsightsContentPanel"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <StackPanel x:Name="AutomationSection" Width="320" Margin="0,0,16,16" Visibility="Collapsed">
+                <TextBlock Text="Automation" Tag="Automation" Cursor="Hand"
+                           MouseLeftButtonDown="SectionHeader_MouseLeftButtonDown"
+                           ToolTip="Drag here to reposition (Experimental Custom arrangement only)"
+                           FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+                <Border Background="#14FFFFFF" CornerRadius="8" Padding="16">
+                    <StackPanel>
+                        <CheckBox x:Name="AutomationQuickToggle" Content="Clean automatically"
+                                  ToolTip="Turns background automation on or off using the conditions and items set in Automation Configuration."
+                                  Checked="AutomationQuickToggle_Changed" Unchecked="AutomationQuickToggle_Changed"/>
+                        <TextBlock x:Name="AutomationSummaryText" Margin="0,4,0,8" FontSize="11" Opacity="0.6" TextWrapping="Wrap"/>
+                        <ui:Button Content="Configure" Appearance="Secondary" HorizontalAlignment="Left"
+                                   ToolTip="Opens the dedicated Automation Configuration window"
+                                   Click="ConfigureAutomationButton_Click"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <StackPanel x:Name="CleanSection" Width="380" Margin="0,0,16,16" Visibility="Collapsed">
+                <TextBlock Text="Clean" Tag="Clean" Cursor="Hand"
+                           MouseLeftButtonDown="SectionHeader_MouseLeftButtonDown"
+                           ToolTip="Drag here to reposition (Experimental Custom arrangement only)"
+                           FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+
+                <Border Background="#14FFFFFF" CornerRadius="8" Padding="16" Margin="0,0,0,8">
+                    <StackPanel>
+                        <RadioButton x:Name="NormalModeRadio" Content="Normal (recommended)" IsChecked="True" GroupName="CleanTier"
+                                     ToolTip="Targets low-reuse standby cache only. Minimal disk-reload risk. Safe default."
+                                     Checked="CleanTierRadio_Checked"/>
+                        <TextBlock Text="Targets low-reuse standby cache only. Minimal disk-reload risk. Safe default for automation." Opacity="0.6" FontSize="11" Margin="20,2,0,10" TextWrapping="Wrap"/>
+
+                        <RadioButton x:Name="ModerateModeRadio" Content="Moderate" GroupName="CleanTier"
+                                     ToolTip="Also flushes working sets for a bit more freed memory. Still low risk."
+                                     Checked="CleanTierRadio_Checked"/>
+                        <TextBlock Text="Also flushes working sets for a bit more freed memory. Still low risk." Opacity="0.6" FontSize="11" Margin="20,2,0,0" TextWrapping="Wrap"/>
+
+                        <StackPanel x:Name="CustomTierOption" Visibility="Collapsed">
+                            <RadioButton x:Name="CustomModeRadio" Content="Custom — pick exactly" GroupName="CleanTier" Margin="0,10,0,0"
+                                         ToolTip="Choose exactly which cleanup actions run right now."
+                                         Checked="CleanTierRadio_Checked"/>
+                            <TextBlock Text="Pick exactly which cleanup actions run, including options that may briefly affect responsiveness." Opacity="0.6" FontSize="11" Margin="20,2,0,0" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="CustomPanel" Background="#14FFFFFF" CornerRadius="8" Padding="16" Margin="0,0,0,8" Visibility="Collapsed">
+                    <StackPanel x:Name="CustomItemsPanel"/>
+                </Border>
+
+                <CheckBox x:Name="DryRunCheckBox" Content="Dry run (show what would happen, change nothing)" Margin="0,4,0,4"
+                          ToolTip="Preview which actions would run and how much might be freed, without touching memory."/>
+
+                <ui:Button x:Name="CleanButton"
+                           Content="Purge Memory Now"
+                           Appearance="Primary"
+                           Icon="{ui:SymbolIcon Symbol=Broom24}"
+                           Height="44"
+                           FontWeight="SemiBold"
+                           Margin="0,4,0,0"
+                           ToolTip="Run the cleanup tier selected above right now"
+                           Click="CleanButton_Click"/>
+
+                <TextBlock x:Name="ResultText" Margin="0,12,0,0" TextWrapping="Wrap" Opacity="0.8"/>
+            </StackPanel>
+
+            <StackPanel x:Name="FocusModeSection" Width="380" Margin="0,0,16,16" Visibility="Collapsed">
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Focus Mode" Tag="FocusMode" Cursor="Hand"
+                               MouseLeftButtonDown="SectionHeader_MouseLeftButtonDown"
+                               ToolTip="Drag here to reposition (Experimental Custom arrangement only)"
+                               FontSize="14" FontWeight="SemiBold" Opacity="0.7" VerticalAlignment="Center"/>
+                    <Border Grid.Column="1" Background="#E5484D" CornerRadius="4" Padding="6,1,6,1">
+                        <TextBlock Text="EXPERIMENTAL" FontSize="9" FontWeight="Bold" Foreground="White"/>
+                    </Border>
+                </Grid>
+
+                <Border Background="#14FFFFFF" CornerRadius="8" Padding="16">
+                    <StackPanel>
+                        <TextBlock Text="Pick apps to protect — everything else gets trimmed repeatedly while this runs." FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" x:Name="FocusSearchBox" Margin="0,0,8,0"
+                                     ToolTip="Filter the list below by app name" TextChanged="FocusSearchBox_TextChanged"/>
+                            <ui:Button Grid.Column="1" x:Name="DeselectAllFocusButton"
+                                       Icon="{ui:SymbolIcon Symbol=Eraser24}"
+                                       Appearance="Secondary" Width="32" Height="32" Padding="0"
+                                       ToolTip="Deselect all protected apps"
+                                       Click="DeselectAllFocusButton_Click"/>
+                        </Grid>
+                        <TextBlock Text="Right-click a name to protect it, left-click to remove it. Type above to search." FontSize="10" Opacity="0.5" Margin="0,0,0,8" TextWrapping="Wrap"/>
+
+                        <Grid Margin="0,0,0,8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition x:Name="FocusListRow" Height="180"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Border Grid.Row="0" BorderBrush="#33FFFFFF" BorderThickness="1" CornerRadius="4,4,0,0">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel x:Name="FocusKeepPanel" Margin="8"/>
+                                </ScrollViewer>
+                            </Border>
+                            <Thumb Grid.Row="1" x:Name="FocusListResizeThumb"
+                                   Height="8" Cursor="SizeNS" Background="#22FFFFFF"
+                                   HorizontalAlignment="Stretch"
+                                   ToolTip="Drag to resize the protected-apps list"
+                                   DragDelta="FocusListResizeThumb_DragDelta"
+                                   DragCompleted="FocusListResizeThumb_DragCompleted"/>
+                        </Grid>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <ui:Button Content="Add Folder..." Appearance="Secondary" FontSize="11" Margin="0,0,8,0"
+                                       ToolTip="Protect every .exe found directly inside a folder" Click="AddFocusFolderButton_Click"/>
+                            <ui:Button Content="Add File..." Appearance="Secondary" FontSize="11" Margin="0,0,8,0"
+                                       ToolTip="Protect a single chosen .exe" Click="AddFocusFileButton_Click"/>
+                            <ui:Button Icon="{ui:SymbolIcon Symbol=ArrowSync24}" Appearance="Secondary" Width="32" Padding="0"
+                                       ToolTip="Refresh the list of running apps" Click="RefreshFocusListButton_Click"/>
+                        </StackPanel>
+
+                        <ui:Button x:Name="FocusModeToggleButton" Content="Start Focus Mode" Appearance="Primary" Height="40"
+                                   ToolTip="Repeatedly trims everything except the apps you've protected above"
+                                   Click="FocusModeToggleButton_Click"/>
+                        <TextBlock x:Name="FocusModeStatusText" Margin="0,8,0,0" FontSize="11" Opacity="0.8" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <StackPanel x:Name="PerProcessTrimSection" Width="380" Margin="0,0,16,16" Visibility="Collapsed">
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Per-Process Trim" Tag="PerProcessTrim" Cursor="Hand"
+                               MouseLeftButtonDown="SectionHeader_MouseLeftButtonDown"
+                               ToolTip="Drag here to reposition (Experimental Custom arrangement only)"
+                               FontSize="14" FontWeight="SemiBold" Opacity="0.7" VerticalAlignment="Center"/>
+                    <Border Grid.Column="1" Background="#E5484D" CornerRadius="4" Padding="6,1,6,1">
+                        <TextBlock Text="EXPERIMENTAL" FontSize="9" FontWeight="Bold" Foreground="White"/>
+                    </Border>
+                </Grid>
+
+                <Border Background="#14FFFFFF" CornerRadius="8" Padding="16">
+                    <StackPanel>
+                        <TextBlock Text="Trim a specific process" FontWeight="SemiBold" Margin="0,0,0,2"/>
+                        <TextBlock Text="Uses the official Windows EmptyWorkingSet API on one chosen app instead of purging system-wide." Opacity="0.6" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <ComboBox Grid.Column="0" x:Name="ProcessComboBox" Margin="0,0,8,0"
+                                      ToolTip="Choose a running process to trim"/>
+                            <ui:Button Grid.Column="1" x:Name="RefreshProcessesButton"
+                                       Icon="{ui:SymbolIcon Symbol=ArrowSync24}"
+                                       Appearance="Secondary" Width="36" Height="36" Padding="0"
+                                       ToolTip="Refresh the process list"
+                                       Click="RefreshProcessesButton_Click"/>
+                        </Grid>
+
+                        <ui:Button x:Name="TrimProcessButton"
+                                   Content="Trim Selected Process"
+                                   Appearance="Secondary"
+                                   Height="36"
+                                   Margin="0,10,0,0"
+                                   ToolTip="Empties the working set of the selected process only"
+                                   Click="TrimProcessButton_Click"/>
+
+                        <TextBlock x:Name="ExperimentalResultText" Margin="0,8,0,0" FontSize="11" TextWrapping="Wrap" Opacity="0.8"/>
+                        <TextBlock x:Name="LeakSuspectsText" Margin="0,8,0,0" FontSize="11" TextWrapping="Wrap" Opacity="0.8" Foreground="#E5A21A"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
 
         </StackPanel>
         </ScrollViewer>

@@ -4,8 +4,8 @@
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Icon="Assets/Icons/app.ico"
         Title="Layout"
-        Width="420" Height="520"
-        MinWidth="360" MinHeight="420"
+        Width="440" Height="760"
+        MinWidth="380" MinHeight="480"
         WindowBackdropType="Mica"
         ExtendsContentIntoTitleBar="True"
         WindowStartupLocation="CenterOwner">
@@ -46,9 +46,54 @@
                 </StackPanel>
             </Border>
 
-            <ui:Button Content="Show Everything" Appearance="Secondary" HorizontalAlignment="Left" Margin="0,16,0,0"
+            <ui:Button Content="Show Everything" Appearance="Secondary" HorizontalAlignment="Left" Margin="0,16,0,16"
                        ToolTip="Turn every section back on"
                        Click="ShowEverythingButton_Click"/>
+
+            <TextBlock Text="Arrangement" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+            <Border Background="#14FFFFFF" CornerRadius="8" Padding="16">
+                <StackPanel>
+                    <RadioButton x:Name="AutoArrangeRadio" Content="Automatic (recommended)" GroupName="Arrange"
+                                 ToolTip="Sections reflow on their own to fill whatever space is available."
+                                 Checked="ArrangeRadio_Checked"/>
+                    <RadioButton x:Name="CustomArrangeRadio" Content="Custom — drag, drop, and resize" GroupName="Arrange" Margin="0,6,0,0"
+                                 ToolTip="Drag a section's title onto another section's slot to swap places; drag the dividers between slots to resize."
+                                 Checked="ArrangeRadio_Checked"/>
+                    <TextBlock x:Name="ArrangeLockedText" Margin="20,4,0,0" FontSize="10" Opacity="0.8" TextWrapping="Wrap"
+                               Foreground="#E5A21A" Visibility="Collapsed"
+                               Text="Switch the main window's Mode to Experimental to use Custom arrangement."/>
+
+                    <StackPanel x:Name="SavedArrangementsPanel" Margin="0,14,0,0" Visibility="Collapsed">
+                        <Separator Margin="0,0,0,10"/>
+                        <TextBlock Text="Saved layouts" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <ComboBox x:Name="SavedArrangementsCombo" Margin="0,0,0,8"
+                                  ToolTip="Load a previously saved custom layout"
+                                  SelectionChanged="SavedArrangementsCombo_SelectionChanged"/>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <ui:Button Content="Save Current As..." Appearance="Secondary" FontSize="11" Margin="0,0,8,0"
+                                       ToolTip="Save the current slot positions and sizes under a name"
+                                       Click="SaveArrangementButton_Click"/>
+                            <ui:Button Content="Delete" Appearance="Secondary" FontSize="11"
+                                       ToolTip="Delete the selected saved layout"
+                                       Click="DeleteArrangementButton_Click"/>
+                        </StackPanel>
+
+                        <Grid x:Name="SaveAsPrompt" Visibility="Collapsed" Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" x:Name="SaveAsNameBox" Margin="0,0,8,0" ToolTip="Name for this layout"/>
+                            <ui:Button Grid.Column="1" Content="Save" Appearance="Primary" Click="ConfirmSaveArrangementButton_Click"/>
+                        </Grid>
+
+                        <ui:Button Content="Reset Positions" Appearance="Secondary" FontSize="11" HorizontalAlignment="Left"
+                                   ToolTip="Puts every section back in its default slot at equal size"
+                                   Click="ResetArrangementButton_Click"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
 
             <TextBlock x:Name="StatusText" Margin="0,16,0,0" Opacity="0.6" FontSize="11"/>
 

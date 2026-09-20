@@ -29,13 +29,21 @@ public partial class MainWindow : FluentWindow
     private bool _isLoaded;
     private double _lastAutoWidth;
 
+    /// <summary>Populated fresh by InitSectionMap() every time the visual tree is (re)built —
+    /// after a theme-triggered ReloadUi() the old elements are gone, so this must never be
+    /// captured once and assumed to stay valid.</summary>
+    private Dictionary<string, FrameworkElement> _sections = new();
+    private List<Border> _slotBorders = new();
+    private static readonly string[] SectionOrder =
+        { "MemoryStatus", "Insights", "Automation", "Clean", "FocusMode", "PerProcessTrim" };
+
     // Per-mode sizing so switching modes doesn't leave the window too small (text/buttons
     // crowded) or oddly oversized. MinWidth/MinHeight are hard floors; PreferredWidth is
     // only applied when the window still looks like it's at its previous mode's auto size
     // (i.e. the user hasn't manually resized it) — see ApplyModeSizing.
-    private static readonly (double MinW, double MinH, double PreferredW) NormalSize = (875, 495, 900);
-    private static readonly (double MinW, double MinH, double PreferredW) AdvancedSize = (875, 640, 1000);
-    private static readonly (double MinW, double MinH, double PreferredW) ExperimentalSize = (1180, 660, 1500);
+    private static readonly (double MinW, double MinH, double PreferredW) NormalSize = (480, 480, 900);
+    private static readonly (double MinW, double MinH, double PreferredW) AdvancedSize = (480, 560, 1000);
+    private static readonly (double MinW, double MinH, double PreferredW) ExperimentalSize = (480, 620, 1400);
 
     public MainWindow(AppSettings settings)
     {
@@ -43,6 +51,30 @@ public partial class MainWindow : FluentWindow
         _settings = settings;
         _focusModeController = new FocusModeController(_settings);
         _focusModeController.TickCompleted += result => Dispatcher.Invoke(() => OnFocusModeTick(result));
+
+        InitializeContent();
+
+        _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        _pollTimer.Tick += (_, _) => RefreshStatus();
+        _pollTimer.Start();
+
+        _leakScanTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(60) };
+        _leakScanTimer.Tick += (_, _) => RunLeakScan();
+        _leakScanTimer.Start();
+
+        RefreshStatus();
+    }
+
+    /// <summary>
+    /// Everything needed to populate a freshly-parsed visual tree: building dynamic
+    /// panels, wiring the mode/layout/arrangement state, and restoring anything that
+    /// isn't itself part of the static XAML (Focus Mode's running state, current theme
+    /// icon, etc). Split out from the constructor specifically so ReloadUi() can re-run
+    /// it against a brand new tree without duplicating any of this.
+    /// </summary>
+    private void InitializeContent()
+    {
+        InitSectionMap();
 
         BuildCustomItemsPanel();
         ApplyCompactMode();
@@ -52,18 +84,61 @@ public partial class MainWindow : FluentWindow
         _isLoaded = false;
         UiModeComboBox.SelectedIndex = _settings.EnableExperimentalFeatures ? 2 : _settings.EnableAdvancedCleaning ? 1 : 0;
         ApplyUiMode();
-        ApplyLayoutVisibility();
         RefreshAutomationSummary();
         RefreshInsights();
         _isLoaded = true;
 
-        _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
-        _pollTimer.Tick += (_, _) => RefreshStatus();
-        _pollTimer.Start();
+        if (_focusModeController.IsRunning)
+        {
+            FocusModeToggleButton.Content = "Stop Focus Mode";
+            FocusModeToggleButton.Appearance = ControlAppearance.Danger;
+            FocusModeStatusText.Text = $"Focus Mode running \u2014 protecting: {string.Join(", ", _focusSelectedNames)}. Trimming everything else every {_settings.FocusMode.IntervalSeconds}s.";
+        }
+    }
 
-        _leakScanTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(60) };
-        _leakScanTimer.Tick += (_, _) => RunLeakScan();
-        _leakScanTimer.Start();
+    private void InitSectionMap()
+    {
+        _sections = new Dictionary<string, FrameworkElement>
+        {
+            ["MemoryStatus"] = MemoryStatusSection,
+            ["Insights"] = InsightsSection,
+            ["Automation"] = AutomationSection,
+            ["Clean"] = CleanSection,
+            ["FocusMode"] = FocusModeSection,
+            ["PerProcessTrim"] = PerProcessTrimSection,
+        };
+        _slotBorders = new List<Border> { Slot0, Slot1, Slot2, Slot3, Slot4, Slot5 };
+    }
+
+    /// <summary>
+    /// Rebuilds the entire visual tree in place by re-running InitializeComponent and all
+    /// UI-populating setup. WPF-UI has a known open issue (lepoco/wpfui#1481) where some
+    /// controls don't fully repaint on a live theme switch — chasing every affected
+    /// control individually is fragile, so this instead throws the whole tree away and
+    /// reconstructs it fresh against the now-current theme resources, which is guaranteed
+    /// correct because it's exactly what happens whenever any new window opens (which is
+    /// why re-opening Settings always "fixed" it). The Window object itself keeps its
+    /// identity — App's reference to it, the tray hooks, the global hotkey target, and the
+    /// Closing-to-tray handler are all untouched, since only the content is rebuilt, not
+    /// the window. Current position/size/state are captured and restored around the
+    /// rebuild so this is invisible to the user beyond the repaint itself.
+    /// </summary>
+    internal void ReloadUi()
+    {
+        double left = Left, top = Top, width = Width, height = Height;
+        var state = WindowState;
+
+        InitializeComponent();
+        InitializeContent();
+
+        if (state == WindowState.Normal)
+        {
+            Left = left;
+            Top = top;
+            Width = width;
+            Height = height;
+        }
+        WindowState = state;
 
         RefreshStatus();
     }
@@ -125,27 +200,24 @@ public partial class MainWindow : FluentWindow
         ModeDescriptionText.Text = level switch
         {
             1 => "Full manual control over exactly what gets cleaned.",
-            2 => "Advanced, plus per-process tools that are newer and less battle-tested.",
+            2 => "Advanced, plus per-process tools and a custom drag-to-arrange layout.",
             _ => "Safe, automation-friendly cleaning using known Windows APIs."
         };
 
         CustomTierOption.Visibility = level >= 1 ? Visibility.Visible : Visibility.Collapsed;
-
-        bool showExperimental = level >= 2;
-        ExperimentalArea.Visibility = showExperimental ? Visibility.Visible : Visibility.Collapsed;
-        ExperimentalGutterColumn.Width = showExperimental ? new GridLength(24) : new GridLength(0);
-        ExperimentalColumn.Width = showExperimental ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
-        LayoutButton.Visibility = showExperimental ? Visibility.Visible : Visibility.Collapsed;
+        LayoutButton.Visibility = level >= 2 ? Visibility.Visible : Visibility.Collapsed;
 
         if (level < 1 && CustomModeRadio.IsChecked == true)
             NormalModeRadio.IsChecked = true;
 
         ApplyAdvancedCheckboxAvailability();
+        ApplyLayoutVisibility();
+        ApplyArrangementMode();
         ApplyModeSizing(level);
 
-        if (showExperimental && ProcessComboBox.Items.Count == 0)
+        if (level >= 2 && ProcessComboBox.Items.Count == 0)
             RefreshProcessList();
-        if (showExperimental && _focusPickerNames.Count == 0)
+        if (level >= 2 && _focusPickerNames.Count == 0)
             PopulateFocusList();
     }
 
@@ -192,7 +264,7 @@ public partial class MainWindow : FluentWindow
         _settings.Theme = IsEffectivelyLight() ? ThemeChoice.Dark : ThemeChoice.Light;
         SettingsStore.Save(_settings);
         ThemeApplier.Apply(_settings);
-        UpdateThemeToggleIcon();
+        ReloadUi();
     }
 
     private bool IsEffectivelyLight() => _settings.Theme switch
@@ -212,24 +284,182 @@ public partial class MainWindow : FluentWindow
         ThemeToggleButton.ToolTip = light ? "Switch to dark appearance" : "Switch to light appearance";
     }
 
-    // ----- Layout picker (Experimental only) -----
+    // ----- Layout picker (Experimental only): visibility + arrangement (auto vs custom) -----
 
     private void LayoutButton_Click(object sender, RoutedEventArgs e)
     {
         var layoutWindow = new LayoutWindow(_settings) { Owner = this };
-        layoutWindow.LayoutChanged = ApplyLayoutVisibility;
+        layoutWindow.LayoutChanged = () =>
+        {
+            ApplyLayoutVisibility();
+            ApplyArrangementMode();
+        };
         layoutWindow.ShowDialog();
     }
 
     private void ApplyLayoutVisibility()
     {
         var layout = _settings.Layout;
+        bool experimental = UiModeComboBox.SelectedIndex >= 2;
+
         MemoryStatusSection.Visibility = layout.ShowMemoryStatus ? Visibility.Visible : Visibility.Collapsed;
         InsightsSection.Visibility = layout.ShowInsights ? Visibility.Visible : Visibility.Collapsed;
         AutomationSection.Visibility = layout.ShowAutomation ? Visibility.Visible : Visibility.Collapsed;
         CleanSection.Visibility = layout.ShowClean ? Visibility.Visible : Visibility.Collapsed;
-        FocusModeSection.Visibility = layout.ShowFocusMode ? Visibility.Visible : Visibility.Collapsed;
-        PerProcessTrimSection.Visibility = layout.ShowPerProcessTrim ? Visibility.Visible : Visibility.Collapsed;
+        // Focus Mode and Per-Process Trim are Experimental-only tools regardless of the
+        // Layout checkbox state — the checkbox only matters once already in that mode.
+        FocusModeSection.Visibility = experimental && layout.ShowFocusMode ? Visibility.Visible : Visibility.Collapsed;
+        PerProcessTrimSection.Visibility = experimental && layout.ShowPerProcessTrim ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Switches the body between the automatic reflowing WrapPanel (sections just close
+    /// ranks around whatever's hidden — no manual arranging needed) and the Experimental
+    /// hand-arranged 3x2 slot grid. Reparents the actual section elements between
+    /// whichever container is now active; nothing is duplicated.
+    /// </summary>
+    private void ApplyArrangementMode()
+    {
+        bool custom = _settings.Layout.UseCustomArrangement && UiModeComboBox.SelectedIndex >= 2;
+
+        FlowLayoutPanel.Visibility = custom ? Visibility.Collapsed : Visibility.Visible;
+        CustomLayoutGrid.Visibility = custom ? Visibility.Visible : Visibility.Collapsed;
+
+        if (custom)
+        {
+            ApplyColumnRowWeights();
+            MoveSectionsIntoSlots();
+        }
+        else
+        {
+            MoveSectionsIntoFlow();
+        }
+    }
+
+    private void MoveSectionsIntoFlow()
+    {
+        foreach (var key in SectionOrder)
+        {
+            var el = _sections[key];
+            if (!ReferenceEquals(el.Parent, FlowLayoutPanel))
+            {
+                RemoveFromCurrentParent(el);
+                FlowLayoutPanel.Children.Add(el);
+            }
+        }
+    }
+
+    private void MoveSectionsIntoSlots()
+    {
+        var assignment = _settings.Layout.SlotAssignment;
+
+        // Validate existing assignments (in range, no duplicates), then fill in a slot for
+        // any section that doesn't have one yet.
+        var used = new HashSet<int>();
+        foreach (var key in SectionOrder.ToList())
+        {
+            if (assignment.TryGetValue(key, out int slot) && slot is >= 0 and < 6 && used.Add(slot))
+                continue;
+            assignment.Remove(key);
+        }
+        int nextFree = 0;
+        foreach (var key in SectionOrder)
+        {
+            if (assignment.ContainsKey(key)) continue;
+            while (used.Contains(nextFree)) nextFree++;
+            assignment[key] = nextFree;
+            used.Add(nextFree);
+        }
+
+        foreach (var slot in _slotBorders)
+            slot.Child = null;
+
+        foreach (var key in SectionOrder)
+        {
+            RemoveFromCurrentParent(_sections[key]);
+            _slotBorders[assignment[key]].Child = _sections[key];
+        }
+    }
+
+    private static void RemoveFromCurrentParent(FrameworkElement element)
+    {
+        switch (element.Parent)
+        {
+            case System.Windows.Controls.Panel panel:
+                panel.Children.Remove(element);
+                break;
+            case Border border when ReferenceEquals(border.Child, element):
+                border.Child = null;
+                break;
+        }
+    }
+
+    private void ApplyColumnRowWeights()
+    {
+        var cw = _settings.Layout.ColumnWeights.Length == 3 ? _settings.Layout.ColumnWeights : new double[] { 1, 1, 1 };
+        var rw = _settings.Layout.RowWeights.Length == 2 ? _settings.Layout.RowWeights : new double[] { 1, 1 };
+
+        SlotCol0.Width = new GridLength(Math.Max(cw[0], 0.1), GridUnitType.Star);
+        SlotCol1.Width = new GridLength(Math.Max(cw[1], 0.1), GridUnitType.Star);
+        SlotCol2.Width = new GridLength(Math.Max(cw[2], 0.1), GridUnitType.Star);
+        SlotRow0.Height = new GridLength(Math.Max(rw[0], 0.1), GridUnitType.Star);
+        SlotRow1.Height = new GridLength(Math.Max(rw[1], 0.1), GridUnitType.Star);
+    }
+
+    private void SlotSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
+    {
+        _settings.Layout.ColumnWeights = new[] { SlotCol0.Width.Value, SlotCol1.Width.Value, SlotCol2.Width.Value };
+        _settings.Layout.RowWeights = new[] { SlotRow0.Height.Value, SlotRow1.Height.Value };
+        SettingsStore.Save(_settings);
+    }
+
+    // ----- Custom arrangement drag-and-drop: drag a section header, drop it on a slot -----
+
+    private void SectionHeader_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (!_settings.Layout.UseCustomArrangement || UiModeComboBox.SelectedIndex < 2) return;
+        if (sender is not FrameworkElement fe || fe.Tag is not string key) return;
+
+        DragDrop.DoDragDrop(fe, key, System.Windows.DragDropEffects.Move);
+    }
+
+    private void Slot_DragEnter(object sender, System.Windows.DragEventArgs e)
+    {
+        if (sender is Border slot && e.Data.GetDataPresent(typeof(string)))
+            slot.Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF));
+    }
+
+    private void Slot_DragLeave(object sender, System.Windows.DragEventArgs e)
+    {
+        if (sender is Border slot) slot.Background = System.Windows.Media.Brushes.Transparent;
+    }
+
+    private void Slot_DragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(typeof(string)) ? System.Windows.DragDropEffects.Move : System.Windows.DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void Slot_Drop(object sender, System.Windows.DragEventArgs e)
+    {
+        if (sender is not Border targetSlot) return;
+        targetSlot.Background = System.Windows.Media.Brushes.Transparent;
+
+        if (!e.Data.GetDataPresent(typeof(string))) return;
+        string draggedKey = (string)e.Data.GetData(typeof(string))!;
+
+        int targetIndex = _slotBorders.IndexOf(targetSlot);
+        var assignment = _settings.Layout.SlotAssignment;
+        if (targetIndex < 0 || !assignment.TryGetValue(draggedKey, out int sourceIndex) || sourceIndex == targetIndex)
+            return;
+
+        string? occupantKey = assignment.FirstOrDefault(kv => kv.Value == targetIndex && kv.Key != draggedKey).Key;
+
+        assignment[draggedKey] = targetIndex;
+        if (occupantKey != null) assignment[occupantKey] = sourceIndex;
+
+        SettingsStore.Save(_settings);
+        MoveSectionsIntoSlots();
     }
 
     // ----- Focus Mode list resize handle (Experimental) -----
@@ -602,13 +832,6 @@ public partial class MainWindow : FluentWindow
         (System.Windows.Application.Current as App)?.RestartAutomationIfNeeded();
     }
 
-    private void ConfigureAutomationButton_Click(object sender, RoutedEventArgs e)
-    {
-        var settingsWindow = new SettingsWindow(_settings, scrollToAutomation: true) { Owner = this };
-        WireSettingsCallbacks(settingsWindow);
-        settingsWindow.ShowDialog();
-    }
-
     private void HistoryButton_Click(object sender, RoutedEventArgs e)
     {
         var historyWindow = new HistoryWindow(SettingsStore.HistoryLogPath) { Owner = this };
@@ -742,17 +965,26 @@ public partial class MainWindow : FluentWindow
         settingsWindow.ShowDialog();
     }
 
-    private void AutomationConfigButton_Click(object sender, RoutedEventArgs e)
+    private void AutomationConfigButton_Click(object sender, RoutedEventArgs e) => OpenAutomationConfig();
+
+    private void ConfigureAutomationButton_Click(object sender, RoutedEventArgs e) => OpenAutomationConfig();
+
+    private void OpenAutomationConfig()
     {
-        var settingsWindow = new SettingsWindow(_settings, scrollToAutomation: true) { Owner = this };
-        WireSettingsCallbacks(settingsWindow);
-        settingsWindow.ShowDialog();
+        var automationWindow = new AutomationConfigWindow(_settings) { Owner = this };
+        automationWindow.AutomationChanged = () =>
+        {
+            RefreshAutomationSummary();
+            (System.Windows.Application.Current as App)?.RestartAutomationIfNeeded();
+        };
+        automationWindow.ShowDialog();
         RefreshAutomationSummary();
     }
 
     private void WireSettingsCallbacks(SettingsWindow settingsWindow)
     {
         settingsWindow.CompactModeChanged = () => ApplyCompactMode();
+        settingsWindow.ThemeOrAccentChanged = () => ReloadUi();
         settingsWindow.AutomationChanged = () =>
         {
             RefreshAutomationSummary();

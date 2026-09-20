@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using RamSavior.App.Settings;
 using Wpf.Ui.Controls;
 
@@ -9,8 +10,8 @@ public partial class LayoutWindow : FluentWindow
     private readonly AppSettings _settings;
     private bool _isLoaded;
 
-    /// <summary>Fired live on every toggle so the main window can apply visibility
-    /// immediately, the same pattern SettingsWindow already uses for its callbacks.</summary>
+    /// <summary>Fired live on every change so the main window can apply it immediately —
+    /// visibility, arrangement mode, or a loaded/reset saved layout.</summary>
     public Action? LayoutChanged { get; set; }
 
     public LayoutWindow(AppSettings settings)
@@ -32,6 +33,28 @@ public partial class LayoutWindow : FluentWindow
         CleanCheckBox.IsChecked = layout.ShowClean;
         FocusModeCheckBox.IsChecked = layout.ShowFocusMode;
         PerProcessTrimCheckBox.IsChecked = layout.ShowPerProcessTrim;
+
+        bool experimental = _settings.EnableExperimentalFeatures;
+        CustomArrangeRadio.IsEnabled = experimental;
+        ArrangeLockedText.Visibility = experimental ? Visibility.Collapsed : Visibility.Visible;
+
+        (layout.UseCustomArrangement && experimental ? CustomArrangeRadio : AutoArrangeRadio).IsChecked = true;
+        SavedArrangementsPanel.Visibility = layout.UseCustomArrangement && experimental ? Visibility.Visible : Visibility.Collapsed;
+
+        RefreshSavedArrangementsCombo();
+    }
+
+    private void RefreshSavedArrangementsCombo()
+    {
+        SavedArrangementsCombo.SelectionChanged -= SavedArrangementsCombo_SelectionChanged;
+
+        SavedArrangementsCombo.Items.Clear();
+        SavedArrangementsCombo.Items.Add("(current / unsaved)");
+        foreach (var name in _settings.Layout.SavedArrangements.Keys.OrderBy(n => n, StringComparer.OrdinalIgnoreCase))
+            SavedArrangementsCombo.Items.Add(name);
+        SavedArrangementsCombo.SelectedIndex = 0;
+
+        SavedArrangementsCombo.SelectionChanged += SavedArrangementsCombo_SelectionChanged;
     }
 
     private void LayoutSetting_Changed(object sender, RoutedEventArgs e)
@@ -63,5 +86,84 @@ public partial class LayoutWindow : FluentWindow
         _isLoaded = true;
 
         LayoutSetting_Changed(sender, e);
+    }
+
+    // ----- Arrangement: Automatic vs Custom -----
+
+    private void ArrangeRadio_Checked(object sender, RoutedEventArgs e)
+    {
+        if (!_isLoaded) return;
+
+        _settings.Layout.UseCustomArrangement = ReferenceEquals(sender, CustomArrangeRadio);
+        SettingsStore.Save(_settings);
+
+        SavedArrangementsPanel.Visibility = _settings.Layout.UseCustomArrangement ? Visibility.Visible : Visibility.Collapsed;
+        StatusText.Text = _settings.Layout.UseCustomArrangement
+            ? "Custom arrangement on — drag a section's title onto another slot to swap, or drag a divider to resize."
+            : "Back to automatic reflow.";
+
+        LayoutChanged?.Invoke();
+    }
+
+    private void SaveArrangementButton_Click(object sender, RoutedEventArgs e)
+    {
+        SaveAsPrompt.Visibility = Visibility.Visible;
+        SaveAsNameBox.Text = "";
+        SaveAsNameBox.Focus();
+    }
+
+    private void ConfirmSaveArrangementButton_Click(object sender, RoutedEventArgs e)
+    {
+        string name = SaveAsNameBox.Text.Trim();
+        if (name.Length == 0 || name == "(current / unsaved)") return;
+
+        _settings.Layout.SavedArrangements[name] = new SavedArrangement
+        {
+            SlotAssignment = new Dictionary<string, int>(_settings.Layout.SlotAssignment),
+            ColumnWeights = (double[])_settings.Layout.ColumnWeights.Clone(),
+            RowWeights = (double[])_settings.Layout.RowWeights.Clone()
+        };
+        SettingsStore.Save(_settings);
+
+        SaveAsPrompt.Visibility = Visibility.Collapsed;
+        RefreshSavedArrangementsCombo();
+        SavedArrangementsCombo.SelectedItem = name;
+        StatusText.Text = $"Saved layout \"{name}\".";
+    }
+
+    private void SavedArrangementsCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_isLoaded) return;
+        if (SavedArrangementsCombo.SelectedItem is not string name || name == "(current / unsaved)") return;
+        if (!_settings.Layout.SavedArrangements.TryGetValue(name, out var saved)) return;
+
+        _settings.Layout.SlotAssignment = new Dictionary<string, int>(saved.SlotAssignment);
+        _settings.Layout.ColumnWeights = (double[])saved.ColumnWeights.Clone();
+        _settings.Layout.RowWeights = (double[])saved.RowWeights.Clone();
+        SettingsStore.Save(_settings);
+
+        StatusText.Text = $"Loaded layout \"{name}\".";
+        LayoutChanged?.Invoke();
+    }
+
+    private void DeleteArrangementButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (SavedArrangementsCombo.SelectedItem is not string name || name == "(current / unsaved)") return;
+
+        _settings.Layout.SavedArrangements.Remove(name);
+        SettingsStore.Save(_settings);
+        RefreshSavedArrangementsCombo();
+        StatusText.Text = $"Deleted layout \"{name}\".";
+    }
+
+    private void ResetArrangementButton_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.Layout.SlotAssignment.Clear();
+        _settings.Layout.ColumnWeights = new double[] { 1, 1, 1 };
+        _settings.Layout.RowWeights = new double[] { 1, 1 };
+        SettingsStore.Save(_settings);
+
+        StatusText.Text = "Positions reset to default.";
+        LayoutChanged?.Invoke();
     }
 }
