@@ -99,7 +99,7 @@ public partial class LayoutWindow : FluentWindow
 
         SavedArrangementsPanel.Visibility = _settings.Layout.UseCustomArrangement ? Visibility.Visible : Visibility.Collapsed;
         StatusText.Text = _settings.Layout.UseCustomArrangement
-            ? "Custom arrangement on — drag a section's title onto another slot to swap, or drag a divider to resize."
+            ? "Custom arrangement on — drag any section by its title to move it, or its bottom-right corner to resize it."
             : "Back to automatic reflow.";
 
         LayoutChanged?.Invoke();
@@ -119,9 +119,9 @@ public partial class LayoutWindow : FluentWindow
 
         _settings.Layout.SavedArrangements[name] = new SavedArrangement
         {
-            SlotAssignment = new Dictionary<string, int>(_settings.Layout.SlotAssignment),
-            ColumnWeights = (double[])_settings.Layout.ColumnWeights.Clone(),
-            RowWeights = (double[])_settings.Layout.RowWeights.Clone()
+            Positions = _settings.Layout.Positions.ToDictionary(
+                kv => kv.Key,
+                kv => new PanelBounds { X = kv.Value.X, Y = kv.Value.Y, Width = kv.Value.Width, Height = kv.Value.Height })
         };
         SettingsStore.Save(_settings);
 
@@ -137,9 +137,9 @@ public partial class LayoutWindow : FluentWindow
         if (SavedArrangementsCombo.SelectedItem is not string name || name == "(current / unsaved)") return;
         if (!_settings.Layout.SavedArrangements.TryGetValue(name, out var saved)) return;
 
-        _settings.Layout.SlotAssignment = new Dictionary<string, int>(saved.SlotAssignment);
-        _settings.Layout.ColumnWeights = (double[])saved.ColumnWeights.Clone();
-        _settings.Layout.RowWeights = (double[])saved.RowWeights.Clone();
+        _settings.Layout.Positions = saved.Positions.ToDictionary(
+            kv => kv.Key,
+            kv => new PanelBounds { X = kv.Value.X, Y = kv.Value.Y, Width = kv.Value.Width, Height = kv.Value.Height });
         SettingsStore.Save(_settings);
 
         StatusText.Text = $"Loaded layout \"{name}\".";
@@ -158,12 +158,10 @@ public partial class LayoutWindow : FluentWindow
 
     private void ResetArrangementButton_Click(object sender, RoutedEventArgs e)
     {
-        _settings.Layout.SlotAssignment.Clear();
-        _settings.Layout.ColumnWeights = new double[] { 1, 1, 1 };
-        _settings.Layout.RowWeights = new double[] { 1, 1 };
+        _settings.Layout.Positions.Clear();
         SettingsStore.Save(_settings);
 
-        StatusText.Text = "Positions reset to default.";
+        StatusText.Text = "Positions reset — sections will cascade back to their default spots.";
         LayoutChanged?.Invoke();
     }
 }

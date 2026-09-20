@@ -33,9 +33,22 @@ public partial class MainWindow : FluentWindow
     /// after a theme-triggered ReloadUi() the old elements are gone, so this must never be
     /// captured once and assumed to stay valid.</summary>
     private Dictionary<string, FrameworkElement> _sections = new();
-    private List<Border> _slotBorders = new();
+    private Dictionary<string, System.Windows.Controls.Primitives.Thumb> _resizeThumbs = new();
     private static readonly string[] SectionOrder =
         { "MemoryStatus", "Insights", "Automation", "Clean", "FocusMode", "PerProcessTrim" };
+
+    private static readonly Dictionary<string, double> DefaultFlowWidth = new()
+    {
+        ["MemoryStatus"] = 320, ["Insights"] = 320, ["Automation"] = 320,
+        ["Clean"] = 380, ["FocusMode"] = 380, ["PerProcessTrim"] = 380,
+    };
+
+    // Free-form canvas drag state (Experimental Custom arrangement).
+    private const double SnapThreshold = 8;
+    private bool _isDraggingSection;
+    private FrameworkElement? _draggedSection;
+    private System.Windows.Point _dragStartMouse;
+    private double _dragStartLeft, _dragStartTop;
 
     // Per-mode sizing so switching modes doesn't leave the window too small (text/buttons
     // crowded) or oddly oversized. MinWidth/MinHeight are hard floors; PreferredWidth is
@@ -75,6 +88,8 @@ public partial class MainWindow : FluentWindow
     private void InitializeContent()
     {
         InitSectionMap();
+        _isDraggingSection = false;
+        _draggedSection = null;
 
         BuildCustomItemsPanel();
         ApplyCompactMode();
@@ -107,7 +122,15 @@ public partial class MainWindow : FluentWindow
             ["FocusMode"] = FocusModeSection,
             ["PerProcessTrim"] = PerProcessTrimSection,
         };
-        _slotBorders = new List<Border> { Slot0, Slot1, Slot2, Slot3, Slot4, Slot5 };
+        _resizeThumbs = new Dictionary<string, System.Windows.Controls.Primitives.Thumb>
+        {
+            ["MemoryStatus"] = MemoryStatusResizeThumb,
+            ["Insights"] = InsightsResizeThumb,
+            ["Automation"] = AutomationResizeThumb,
+            ["Clean"] = CleanResizeThumb,
+            ["FocusMode"] = FocusModeResizeThumb,
+            ["PerProcessTrim"] = PerProcessTrimResizeThumb,
+        };
     }
 
     /// <summary>
@@ -315,25 +338,25 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// Switches the body between the automatic reflowing WrapPanel (sections just close
     /// ranks around whatever's hidden — no manual arranging needed) and the Experimental
-    /// hand-arranged 3x2 slot grid. Reparents the actual section elements between
-    /// whichever container is now active; nothing is duplicated.
+    /// free-form canvas, where each section can be dragged anywhere and resized from its
+    /// corner, with live snapping — the same feel as arranging windows on a desktop or
+    /// docking panels in an IDE, rather than a fixed grid of slots. Reparents the actual
+    /// section elements between whichever container is now active; nothing is duplicated.
     /// </summary>
     private void ApplyArrangementMode()
     {
         bool custom = _settings.Layout.UseCustomArrangement && UiModeComboBox.SelectedIndex >= 2;
 
         FlowLayoutPanel.Visibility = custom ? Visibility.Collapsed : Visibility.Visible;
-        CustomLayoutGrid.Visibility = custom ? Visibility.Visible : Visibility.Collapsed;
+        CustomLayoutCanvas.Visibility = custom ? Visibility.Visible : Visibility.Collapsed;
+
+        foreach (var thumb in _resizeThumbs.Values)
+            thumb.Visibility = custom ? Visibility.Visible : Visibility.Collapsed;
 
         if (custom)
-        {
-            ApplyColumnRowWeights();
-            MoveSectionsIntoSlots();
-        }
+            MoveSectionsIntoCanvas();
         else
-        {
             MoveSectionsIntoFlow();
-        }
     }
 
     private void MoveSectionsIntoFlow()
@@ -346,38 +369,39 @@ public partial class MainWindow : FluentWindow
                 RemoveFromCurrentParent(el);
                 FlowLayoutPanel.Children.Add(el);
             }
+            el.Margin = new Thickness(0, 0, 16, 16);
+            el.Width = DefaultFlowWidth[key];
+            el.Height = double.NaN; // auto-height — the WrapPanel card fits its content
         }
     }
 
-    private void MoveSectionsIntoSlots()
+    private void MoveSectionsIntoCanvas()
     {
-        var assignment = _settings.Layout.SlotAssignment;
-
-        // Validate existing assignments (in range, no duplicates), then fill in a slot for
-        // any section that doesn't have one yet.
-        var used = new HashSet<int>();
-        foreach (var key in SectionOrder.ToList())
+        for (int i = 0; i < SectionOrder.Length; i++)
         {
-            if (assignment.TryGetValue(key, out int slot) && slot is >= 0 and < 6 && used.Add(slot))
-                continue;
-            assignment.Remove(key);
-        }
-        int nextFree = 0;
-        foreach (var key in SectionOrder)
-        {
-            if (assignment.ContainsKey(key)) continue;
-            while (used.Contains(nextFree)) nextFree++;
-            assignment[key] = nextFree;
-            used.Add(nextFree);
-        }
+            string key = SectionOrder[i];
+            var el = _sections[key];
 
-        foreach (var slot in _slotBorders)
-            slot.Child = null;
+            if (!ReferenceEquals(el.Parent, CustomLayoutCanvas))
+            {
+                RemoveFromCurrentParent(el);
+                el.Margin = new Thickness(0); // Canvas treats Margin as an extra offset — don't want that here
+                CustomLayoutCanvas.Children.Add(el);
+                System.Windows.Controls.Panel.SetZIndex(el, 1);
+            }
 
-        foreach (var key in SectionOrder)
-        {
-            RemoveFromCurrentParent(_sections[key]);
-            _slotBorders[assignment[key]].Child = _sections[key];
+            if (!_settings.Layout.Positions.TryGetValue(key, out var bounds))
+            {
+                // First time this section has ever been dragged onto the canvas — cascade
+                // sensible starting spots instead of stacking everything at (0,0).
+                bounds = new PanelBounds { X = (i % 3) * 340, Y = (i / 3) * 300, Width = 320, Height = 280 };
+                _settings.Layout.Positions[key] = bounds;
+            }
+
+            el.Width = bounds.Width;
+            el.Height = bounds.Height;
+            Canvas.SetLeft(el, bounds.X);
+            Canvas.SetTop(el, bounds.Y);
         }
     }
 
@@ -394,72 +418,163 @@ public partial class MainWindow : FluentWindow
         }
     }
 
-    private void ApplyColumnRowWeights()
+    private void SaveCurrentCustomPositions()
     {
-        var cw = _settings.Layout.ColumnWeights.Length == 3 ? _settings.Layout.ColumnWeights : new double[] { 1, 1, 1 };
-        var rw = _settings.Layout.RowWeights.Length == 2 ? _settings.Layout.RowWeights : new double[] { 1, 1 };
+        foreach (var key in SectionOrder)
+        {
+            var el = _sections[key];
+            if (!ReferenceEquals(el.Parent, CustomLayoutCanvas)) continue;
 
-        SlotCol0.Width = new GridLength(Math.Max(cw[0], 0.1), GridUnitType.Star);
-        SlotCol1.Width = new GridLength(Math.Max(cw[1], 0.1), GridUnitType.Star);
-        SlotCol2.Width = new GridLength(Math.Max(cw[2], 0.1), GridUnitType.Star);
-        SlotRow0.Height = new GridLength(Math.Max(rw[0], 0.1), GridUnitType.Star);
-        SlotRow1.Height = new GridLength(Math.Max(rw[1], 0.1), GridUnitType.Star);
-    }
-
-    private void SlotSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
-    {
-        _settings.Layout.ColumnWeights = new[] { SlotCol0.Width.Value, SlotCol1.Width.Value, SlotCol2.Width.Value };
-        _settings.Layout.RowWeights = new[] { SlotRow0.Height.Value, SlotRow1.Height.Value };
+            _settings.Layout.Positions[key] = new PanelBounds
+            {
+                X = Canvas.GetLeft(el),
+                Y = Canvas.GetTop(el),
+                Width = el.Width,
+                Height = el.Height
+            };
+        }
         SettingsStore.Save(_settings);
     }
 
-    // ----- Custom arrangement drag-and-drop: drag a section header, drop it on a slot -----
+    // ----- Free-form drag-to-reposition, with live edge/alignment snapping -----
 
     private void SectionHeader_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (!_settings.Layout.UseCustomArrangement || UiModeComboBox.SelectedIndex < 2) return;
-        if (sender is not FrameworkElement fe || fe.Tag is not string key) return;
+        if (sender is not FrameworkElement header || header.Tag is not string key) return;
 
-        DragDrop.DoDragDrop(fe, key, System.Windows.DragDropEffects.Move);
-    }
+        _draggedSection = _sections[key];
+        _isDraggingSection = true;
+        _dragStartMouse = e.GetPosition(CustomLayoutCanvas);
+        _dragStartLeft = Canvas.GetLeft(_draggedSection);
+        _dragStartTop = Canvas.GetTop(_draggedSection);
 
-    private void Slot_DragEnter(object sender, System.Windows.DragEventArgs e)
-    {
-        if (sender is Border slot && e.Data.GetDataPresent(typeof(string)))
-            slot.Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF));
-    }
+        System.Windows.Controls.Panel.SetZIndex(_draggedSection, 50); // float the one being dragged above the rest
 
-    private void Slot_DragLeave(object sender, System.Windows.DragEventArgs e)
-    {
-        if (sender is Border slot) slot.Background = System.Windows.Media.Brushes.Transparent;
-    }
-
-    private void Slot_DragOver(object sender, System.Windows.DragEventArgs e)
-    {
-        e.Effects = e.Data.GetDataPresent(typeof(string)) ? System.Windows.DragDropEffects.Move : System.Windows.DragDropEffects.None;
+        header.CaptureMouse();
         e.Handled = true;
     }
 
-    private void Slot_Drop(object sender, System.Windows.DragEventArgs e)
+    private void SectionHeader_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
     {
-        if (sender is not Border targetSlot) return;
-        targetSlot.Background = System.Windows.Media.Brushes.Transparent;
+        if (!_isDraggingSection || _draggedSection is null) return;
+        if (e.LeftButton != System.Windows.Input.MouseButtonState.Pressed) return;
 
-        if (!e.Data.GetDataPresent(typeof(string))) return;
-        string draggedKey = (string)e.Data.GetData(typeof(string))!;
+        var pos = e.GetPosition(CustomLayoutCanvas);
+        double rawLeft = Math.Max(0, _dragStartLeft + (pos.X - _dragStartMouse.X));
+        double rawTop = Math.Max(0, _dragStartTop + (pos.Y - _dragStartMouse.Y));
 
-        int targetIndex = _slotBorders.IndexOf(targetSlot);
-        var assignment = _settings.Layout.SlotAssignment;
-        if (targetIndex < 0 || !assignment.TryGetValue(draggedKey, out int sourceIndex) || sourceIndex == targetIndex)
+        var (left, top, showVertical, verticalAt, showHorizontal, horizontalAt) = ApplySnap(_draggedSection, rawLeft, rawTop);
+
+        Canvas.SetLeft(_draggedSection, left);
+        Canvas.SetTop(_draggedSection, top);
+
+        SetSnapGuide(VerticalSnapGuide, showVertical, vertical: true, verticalAt);
+        SetSnapGuide(HorizontalSnapGuide, showHorizontal, vertical: false, horizontalAt);
+    }
+
+    private void SectionHeader_MouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (!_isDraggingSection) return;
+
+        _isDraggingSection = false;
+        if (_draggedSection != null) System.Windows.Controls.Panel.SetZIndex(_draggedSection, 1);
+        _draggedSection = null;
+
+        if (sender is UIElement el) el.ReleaseMouseCapture();
+
+        VerticalSnapGuide.Visibility = Visibility.Collapsed;
+        HorizontalSnapGuide.Visibility = Visibility.Collapsed;
+
+        SaveCurrentCustomPositions();
+    }
+
+    /// <summary>
+    /// Smart-guide snapping like Windows/PowerPoint/Figma: as a section's edge passes
+    /// close to the canvas edge or another section's edge, it snaps flush against it and
+    /// a thin guide line appears for the duration of the drag. Purely a visual/positional
+    /// aid — nothing is locked in place, the user can keep dragging past it freely.
+    /// </summary>
+    private (double left, double top, bool showV, double vAt, bool showH, double hAt) ApplySnap(
+        FrameworkElement dragged, double left, double top)
+    {
+        double width = dragged.Width;
+        double height = dragged.Height;
+
+        var xTargets = new List<double> { 0, Math.Max(CustomLayoutCanvas.ActualWidth, CustomLayoutCanvas.MinWidth) };
+        var yTargets = new List<double> { 0, Math.Max(CustomLayoutCanvas.ActualHeight, CustomLayoutCanvas.MinHeight) };
+
+        foreach (var key in SectionOrder)
+        {
+            var other = _sections[key];
+            if (ReferenceEquals(other, dragged) || other.Visibility != Visibility.Visible) continue;
+            if (!ReferenceEquals(other.Parent, CustomLayoutCanvas)) continue;
+
+            double ox = Canvas.GetLeft(other), oy = Canvas.GetTop(other);
+            double ow = other.Width, oh = other.Height;
+
+            xTargets.Add(ox);
+            xTargets.Add(ox + ow);
+            yTargets.Add(oy);
+            yTargets.Add(oy + oh);
+        }
+
+        bool showV = false, showH = false;
+        double vAt = 0, hAt = 0;
+        double snappedLeft = left, snappedTop = top;
+
+        foreach (double t in xTargets)
+        {
+            if (Math.Abs(left - t) < SnapThreshold) { snappedLeft = t; showV = true; vAt = t; break; }
+            if (Math.Abs(left + width - t) < SnapThreshold) { snappedLeft = t - width; showV = true; vAt = t; break; }
+        }
+
+        foreach (double t in yTargets)
+        {
+            if (Math.Abs(top - t) < SnapThreshold) { snappedTop = t; showH = true; hAt = t; break; }
+            if (Math.Abs(top + height - t) < SnapThreshold) { snappedTop = t - height; showH = true; hAt = t; break; }
+        }
+
+        return (snappedLeft, snappedTop, showV, vAt, showH, hAt);
+    }
+
+    private void SetSnapGuide(System.Windows.Shapes.Rectangle guide, bool show, bool vertical, double at)
+    {
+        if (!show)
+        {
+            guide.Visibility = Visibility.Collapsed;
             return;
+        }
 
-        string? occupantKey = assignment.FirstOrDefault(kv => kv.Value == targetIndex && kv.Key != draggedKey).Key;
+        guide.Visibility = Visibility.Visible;
+        if (vertical)
+        {
+            Canvas.SetLeft(guide, at);
+            Canvas.SetTop(guide, 0);
+            guide.Height = Math.Max(CustomLayoutCanvas.ActualHeight, CustomLayoutCanvas.MinHeight);
+        }
+        else
+        {
+            Canvas.SetTop(guide, at);
+            Canvas.SetLeft(guide, 0);
+            guide.Width = Math.Max(CustomLayoutCanvas.ActualWidth, CustomLayoutCanvas.MinWidth);
+        }
+    }
 
-        assignment[draggedKey] = targetIndex;
-        if (occupantKey != null) assignment[occupantKey] = sourceIndex;
+    // ----- Free-form resize from each section's corner grip -----
 
-        SettingsStore.Save(_settings);
-        MoveSectionsIntoSlots();
+    private void ResizeThumb_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
+    {
+        if (sender is not FrameworkElement thumb || thumb.Tag is not string key) return;
+        var section = _sections[key];
+
+        section.Width = Math.Max(240, section.Width + e.HorizontalChange);
+        section.Height = Math.Max(140, section.Height + e.VerticalChange);
+    }
+
+    private void ResizeThumb_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
+    {
+        SaveCurrentCustomPositions();
     }
 
     // ----- Focus Mode list resize handle (Experimental) -----

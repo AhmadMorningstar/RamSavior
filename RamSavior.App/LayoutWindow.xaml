@@ -57,7 +57,7 @@
                                  ToolTip="Sections reflow on their own to fill whatever space is available."
                                  Checked="ArrangeRadio_Checked"/>
                     <RadioButton x:Name="CustomArrangeRadio" Content="Custom — drag, drop, and resize" GroupName="Arrange" Margin="0,6,0,0"
-                                 ToolTip="Drag a section's title onto another section's slot to swap places; drag the dividers between slots to resize."
+                                 ToolTip="Drag any section by its title anywhere on the window, and resize it from its bottom-right corner. Edges snap to the canvas and to other sections as you drag."
                                  Checked="ArrangeRadio_Checked"/>
                     <TextBlock x:Name="ArrangeLockedText" Margin="20,4,0,0" FontSize="10" Opacity="0.8" TextWrapping="Wrap"
                                Foreground="#E5A21A" Visibility="Collapsed"
@@ -72,7 +72,7 @@
 
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <ui:Button Content="Save Current As..." Appearance="Secondary" FontSize="11" Margin="0,0,8,0"
-                                       ToolTip="Save the current slot positions and sizes under a name"
+                                       ToolTip="Save the current positions and sizes under a name"
                                        Click="SaveArrangementButton_Click"/>
                             <ui:Button Content="Delete" Appearance="Secondary" FontSize="11"
                                        ToolTip="Delete the selected saved layout"
@@ -89,7 +89,7 @@
                         </Grid>
 
                         <ui:Button Content="Reset Positions" Appearance="Secondary" FontSize="11" HorizontalAlignment="Left"
-                                   ToolTip="Puts every section back in its default slot at equal size"
+                                   ToolTip="Clears saved positions — sections cascade back to their default spots"
                                    Click="ResetArrangementButton_Click"/>
                     </StackPanel>
                 </StackPanel>
