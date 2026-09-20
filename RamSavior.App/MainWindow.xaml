@@ -22,71 +22,114 @@
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
         <StackPanel x:Name="RootContent" Margin="24,12,24,24">
 
-            <!-- Header: Mode selector + top-right icon bar -->
+            <!-- Header: Mode selector (always top-left) + a repositionable icon bar. In
+                 Normal/Advanced the icon bar is always TopRight; in Experimental it can be
+                 moved to any of 6 zones via the Layout window, reparenting the same IconBar
+                 StackPanel into whichever slot below is active (see ApplyIconBarPosition). -->
             <Grid Margin="0,0,0,16">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
 
-                <StackPanel Grid.Column="0" Orientation="Horizontal">
-                    <TextBlock Text="Mode" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,10,0"/>
-                    <ComboBox x:Name="UiModeComboBox" Width="160"
-                              ToolTip="Normal: safe automation-friendly cleaning. Advanced: full manual control. Experimental: adds newer per-process, Focus Mode, and a fully custom drag-and-drop layout."
-                              SelectionChanged="UiModeComboBox_SelectionChanged">
-                        <ComboBoxItem Content="Normal"/>
-                        <ComboBoxItem Content="Advanced"/>
-                        <ComboBoxItem Content="Experimental"/>
-                    </ComboBox>
-                    <TextBlock x:Name="ModeDescriptionText" VerticalAlignment="Center" Margin="12,0,0,0" Opacity="0.6" FontSize="11"/>
-                </StackPanel>
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1*"/>
+                        <ColumnDefinition Width="1*"/>
+                        <ColumnDefinition Width="1*"/>
+                    </Grid.ColumnDefinitions>
 
-                <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <ui:Button x:Name="LayoutButton"
-                               Icon="{ui:SymbolIcon Symbol=Grid24}"
-                               Appearance="Secondary"
-                               Width="32" Height="32" Padding="0" Margin="0,0,6,0"
-                               ToolTip="Layout — choose which sections appear, and (Experimental) freely drag and resize them"
-                               Visibility="Collapsed"
-                               Click="LayoutButton_Click"/>
-                    <ui:Button x:Name="ThemeToggleButton"
-                               Icon="{ui:SymbolIcon Symbol=WeatherMoon24}"
-                               Appearance="Secondary"
-                               Width="32" Height="32" Padding="0" Margin="0,0,6,0"
-                               ToolTip="Quick switch between light and dark appearance"
-                               Click="ThemeToggleButton_Click"/>
-                    <ui:Button x:Name="AutomationConfigButton"
-                               Icon="{ui:SymbolIcon Symbol=Wrench24}"
-                               Appearance="Secondary"
-                               Width="32" Height="32" Padding="0" Margin="0,0,6,0"
-                               ToolTip="Automation Configuration — everything about when and what automation cleans, in one dedicated window"
-                               Click="AutomationConfigButton_Click"/>
-                    <ui:Button x:Name="HistoryButton"
-                               Icon="{ui:SymbolIcon Symbol=History24}"
-                               Appearance="Secondary"
-                               Width="32" Height="32" Padding="0" Margin="0,0,6,0"
-                               ToolTip="History — recent cleaning results"
-                               Click="HistoryButton_Click"/>
-                    <ui:Button x:Name="SettingsButton"
-                               Icon="{ui:SymbolIcon Symbol=Settings24}"
-                               Appearance="Secondary"
-                               Width="32" Height="32" Padding="0"
-                               ToolTip="Settings — appearance, startup, and the Danger Zone"
-                               Click="SettingsButton_Click"/>
-                </StackPanel>
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left">
+                        <TextBlock Text="Mode" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,10,0"/>
+                        <ComboBox x:Name="UiModeComboBox" Width="160"
+                                  ToolTip="Normal: safe automation-friendly cleaning. Advanced: full manual control. Experimental: adds newer per-process, Focus Mode, and a fully custom drag-and-drop layout."
+                                  SelectionChanged="UiModeComboBox_SelectionChanged">
+                            <ComboBoxItem Content="Normal"/>
+                            <ComboBoxItem Content="Advanced"/>
+                            <ComboBoxItem Content="Experimental"/>
+                        </ComboBox>
+                        <TextBlock x:Name="ModeDescriptionText" VerticalAlignment="Center" Margin="12,0,0,0" Opacity="0.6" FontSize="11"/>
+                        <StackPanel x:Name="TopLeftIconSlot" Orientation="Horizontal" Margin="16,0,0,0"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" x:Name="TopCenterIconSlot" Orientation="Horizontal" HorizontalAlignment="Center"/>
+                    <StackPanel Grid.Column="2" x:Name="TopRightIconSlot" Orientation="Horizontal" HorizontalAlignment="Right"/>
+                </Grid>
+
+                <Grid Grid.Row="1" x:Name="BottomIconRow" Margin="0,10,0,0" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1*"/>
+                        <ColumnDefinition Width="1*"/>
+                        <ColumnDefinition Width="1*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" x:Name="BottomLeftIconSlot" Orientation="Horizontal" HorizontalAlignment="Left"/>
+                    <StackPanel Grid.Column="1" x:Name="BottomCenterIconSlot" Orientation="Horizontal" HorizontalAlignment="Center"/>
+                    <StackPanel Grid.Column="2" x:Name="BottomRightIconSlot" Orientation="Horizontal" HorizontalAlignment="Right"/>
+                </Grid>
             </Grid>
 
-            <!-- BODY: exactly one of these two is visible at a time -->
+            <!-- The icon bar itself: one reusable StackPanel, reparented by code into
+                 whichever slot above is currently active (see ApplyIconBarPosition). -->
+            <StackPanel x:Name="IconBar" Orientation="Horizontal" Visibility="Collapsed">
+                <ui:Button x:Name="LayoutButton"
+                           Icon="{ui:SymbolIcon Symbol=Grid24}"
+                           Appearance="Secondary"
+                           Width="32" Height="32" Padding="0" Margin="0,0,6,0"
+                           ToolTip="Layout — choose which sections appear, and (Experimental) freely drag and resize them"
+                           Visibility="Collapsed"
+                           Click="LayoutButton_Click"/>
+                <ui:Button x:Name="ThemeToggleButton"
+                           Icon="{ui:SymbolIcon Symbol=WeatherMoon24}"
+                           Appearance="Secondary"
+                           Width="32" Height="32" Padding="0" Margin="0,0,6,0"
+                           ToolTip="Quick switch between light and dark appearance"
+                           Click="ThemeToggleButton_Click"/>
+                <ui:Button x:Name="AutomationConfigButton"
+                           Icon="{ui:SymbolIcon Symbol=Wrench24}"
+                           Appearance="Secondary"
+                           Width="32" Height="32" Padding="0" Margin="0,0,6,0"
+                           ToolTip="Automation Configuration — everything about when and what automation cleans, in one dedicated window"
+                           Click="AutomationConfigButton_Click"/>
+                <ui:Button x:Name="HistoryButton"
+                           Icon="{ui:SymbolIcon Symbol=History24}"
+                           Appearance="Secondary"
+                           Width="32" Height="32" Padding="0" Margin="0,0,6,0"
+                           ToolTip="History — recent cleaning results"
+                           Click="HistoryButton_Click"/>
+                <ui:Button x:Name="SettingsButton"
+                           Icon="{ui:SymbolIcon Symbol=Settings24}"
+                           Appearance="Secondary"
+                           Width="32" Height="32" Padding="0"
+                           ToolTip="Settings — appearance, startup, and the Danger Zone"
+                           Click="SettingsButton_Click"/>
+            </StackPanel>
+
+            <!-- BODY: exactly one of these three is visible at a time -->
             <Grid>
 
-                <!-- Automatic layout: sections just flow and reflow to fill available space -->
+                <!-- Normal/Advanced: a fixed, non-draggable dashboard layout. Memory Status
+                     is the priority item, top of the left column; Insights and Automation
+                     follow beneath it; Clean gets its own column since it's the primary
+                     action. Column MinWidths keep it from ever breaking as the window is
+                     resized, while still filling whatever width is available. -->
+                <Grid x:Name="FixedLayoutGrid" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1*" MinWidth="300"/>
+                        <ColumnDefinition Width="24"/>
+                        <ColumnDefinition Width="1.15*" MinWidth="360"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" x:Name="FixedLeftColumn" VerticalAlignment="Top"/>
+                    <StackPanel Grid.Column="2" x:Name="FixedRightColumn" VerticalAlignment="Top"/>
+                </Grid>
+
+                <!-- Experimental Automatic: sections just flow and reflow to fill available space -->
                 <WrapPanel x:Name="FlowLayoutPanel" Orientation="Horizontal"/>
 
-                <!-- Custom (Experimental) layout: a true free-form canvas. Sections can be
-                     dragged anywhere and resized from their corner grip, with live
-                     edge/alignment snapping (against the canvas edges and other sections),
-                     the same feel as arranging windows on a desktop or panels in an IDE.
-                     Populated/managed entirely in code-behind. -->
+                <!-- Experimental Custom: a true free-form canvas. Sections can be dragged
+                     anywhere and resized from their corner grip, with live edge/alignment
+                     snapping (against the canvas edges and other sections), the same feel
+                     as arranging windows on a desktop or panels in an IDE. Populated/managed
+                     entirely in code-behind. -->
                 <Canvas x:Name="CustomLayoutCanvas" MinWidth="1200" MinHeight="720" Visibility="Collapsed">
                     <Rectangle x:Name="VerticalSnapGuide" Width="2" Fill="#3B82F6" Visibility="Collapsed" IsHitTestVisible="False" Panel.ZIndex="1000"/>
                     <Rectangle x:Name="HorizontalSnapGuide" Height="2" Fill="#3B82F6" Visibility="Collapsed" IsHitTestVisible="False" Panel.ZIndex="1000"/>

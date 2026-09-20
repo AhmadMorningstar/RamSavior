@@ -53,9 +53,11 @@ public partial class MainWindow : FluentWindow
     // Per-mode sizing so switching modes doesn't leave the window too small (text/buttons
     // crowded) or oddly oversized. MinWidth/MinHeight are hard floors; PreferredWidth is
     // only applied when the window still looks like it's at its previous mode's auto size
-    // (i.e. the user hasn't manually resized it) — see ApplyModeSizing.
-    private static readonly (double MinW, double MinH, double PreferredW) NormalSize = (480, 480, 900);
-    private static readonly (double MinW, double MinH, double PreferredW) AdvancedSize = (480, 560, 1000);
+    // (i.e. the user hasn't manually resized it) — see ApplyModeSizing. Normal/Advanced use
+    // the fixed two-column dashboard (MinWidth accounts for both columns' own MinWidth plus
+    // margins); Experimental's free-form canvas keeps its own low floor untouched.
+    private static readonly (double MinW, double MinH, double PreferredW) NormalSize = (760, 560, 940);
+    private static readonly (double MinW, double MinH, double PreferredW) AdvancedSize = (760, 620, 1000);
     private static readonly (double MinW, double MinH, double PreferredW) ExperimentalSize = (480, 620, 1400);
 
     public MainWindow(AppSettings settings)
@@ -236,6 +238,7 @@ public partial class MainWindow : FluentWindow
         ApplyAdvancedCheckboxAvailability();
         ApplyLayoutVisibility();
         ApplyArrangementMode();
+        ApplyIconBarPosition();
         ApplyModeSizing(level);
 
         if (level >= 2 && ProcessComboBox.Items.Count == 0)
@@ -277,6 +280,34 @@ public partial class MainWindow : FluentWindow
             Height = Math.Min(target.MinH, SystemParameters.WorkArea.Height - 40);
     }
 
+    // ----- Icon bar position (Experimental only — Normal/Advanced always use TopRight) -----
+
+    private void ApplyIconBarPosition()
+    {
+        bool experimental = UiModeComboBox.SelectedIndex >= 2;
+        var position = experimental ? _settings.Layout.IconBarPosition : IconBarPosition.TopRight;
+
+        var target = position switch
+        {
+            IconBarPosition.TopLeft => TopLeftIconSlot,
+            IconBarPosition.TopCenter => TopCenterIconSlot,
+            IconBarPosition.BottomLeft => BottomLeftIconSlot,
+            IconBarPosition.BottomCenter => BottomCenterIconSlot,
+            IconBarPosition.BottomRight => BottomRightIconSlot,
+            _ => TopRightIconSlot
+        };
+
+        if (!ReferenceEquals(IconBar.Parent, target))
+        {
+            RemoveFromCurrentParent(IconBar);
+            target.Children.Add(IconBar);
+        }
+        IconBar.Visibility = Visibility.Visible;
+
+        bool bottom = position is IconBarPosition.BottomLeft or IconBarPosition.BottomCenter or IconBarPosition.BottomRight;
+        BottomIconRow.Visibility = bottom ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     // ----- Quick light/dark appearance toggle -----
 
     private void ThemeToggleButton_Click(object sender, RoutedEventArgs e)
@@ -316,6 +347,7 @@ public partial class MainWindow : FluentWindow
         {
             ApplyLayoutVisibility();
             ApplyArrangementMode();
+            ApplyIconBarPosition();
         };
         layoutWindow.ShowDialog();
     }
@@ -325,28 +357,58 @@ public partial class MainWindow : FluentWindow
         var layout = _settings.Layout;
         bool experimental = UiModeComboBox.SelectedIndex >= 2;
 
-        MemoryStatusSection.Visibility = layout.ShowMemoryStatus ? Visibility.Visible : Visibility.Collapsed;
-        InsightsSection.Visibility = layout.ShowInsights ? Visibility.Visible : Visibility.Collapsed;
-        AutomationSection.Visibility = layout.ShowAutomation ? Visibility.Visible : Visibility.Collapsed;
-        CleanSection.Visibility = layout.ShowClean ? Visibility.Visible : Visibility.Collapsed;
-        // Focus Mode and Per-Process Trim are Experimental-only tools regardless of the
-        // Layout checkbox state — the checkbox only matters once already in that mode.
-        FocusModeSection.Visibility = experimental && layout.ShowFocusMode ? Visibility.Visible : Visibility.Collapsed;
-        PerProcessTrimSection.Visibility = experimental && layout.ShowPerProcessTrim ? Visibility.Visible : Visibility.Collapsed;
+        if (experimental)
+        {
+            MemoryStatusSection.Visibility = layout.ShowMemoryStatus ? Visibility.Visible : Visibility.Collapsed;
+            InsightsSection.Visibility = layout.ShowInsights ? Visibility.Visible : Visibility.Collapsed;
+            AutomationSection.Visibility = layout.ShowAutomation ? Visibility.Visible : Visibility.Collapsed;
+            CleanSection.Visibility = layout.ShowClean ? Visibility.Visible : Visibility.Collapsed;
+            FocusModeSection.Visibility = layout.ShowFocusMode ? Visibility.Visible : Visibility.Collapsed;
+            PerProcessTrimSection.Visibility = layout.ShowPerProcessTrim ? Visibility.Visible : Visibility.Collapsed;
+        }
+        else
+        {
+            // Normal/Advanced use a fixed dashboard that always shows all four relevant
+            // sections — the Layout picker (where visibility is customized) only appears
+            // in Experimental, so honoring stale flags here would just be confusing:
+            // there'd be no way to see why a section vanished.
+            MemoryStatusSection.Visibility = Visibility.Visible;
+            InsightsSection.Visibility = Visibility.Visible;
+            AutomationSection.Visibility = Visibility.Visible;
+            CleanSection.Visibility = Visibility.Visible;
+            FocusModeSection.Visibility = Visibility.Collapsed;
+            PerProcessTrimSection.Visibility = Visibility.Collapsed;
+        }
     }
 
     /// <summary>
-    /// Switches the body between the automatic reflowing WrapPanel (sections just close
-    /// ranks around whatever's hidden — no manual arranging needed) and the Experimental
-    /// free-form canvas, where each section can be dragged anywhere and resized from its
-    /// corner, with live snapping — the same feel as arranging windows on a desktop or
-    /// docking panels in an IDE, rather than a fixed grid of slots. Reparents the actual
-    /// section elements between whichever container is now active; nothing is duplicated.
+    /// Picks the body container for the current mode. Normal/Advanced always get the
+    /// fixed, non-draggable dashboard (FixedLayoutGrid) — untouched by any Layout/Custom
+    /// setting, since those only apply in Experimental. Experimental keeps its existing
+    /// two arrangements exactly as they were: the automatic reflowing WrapPanel, or the
+    /// free-form drag/resize/snap canvas. Reparents the actual section elements between
+    /// whichever container is now active; nothing is duplicated.
     /// </summary>
     private void ApplyArrangementMode()
     {
-        bool custom = _settings.Layout.UseCustomArrangement && UiModeComboBox.SelectedIndex >= 2;
+        int level = UiModeComboBox.SelectedIndex;
 
+        if (level < 2)
+        {
+            FlowLayoutPanel.Visibility = Visibility.Collapsed;
+            CustomLayoutCanvas.Visibility = Visibility.Collapsed;
+            FixedLayoutGrid.Visibility = Visibility.Visible;
+
+            foreach (var thumb in _resizeThumbs.Values)
+                thumb.Visibility = Visibility.Collapsed;
+
+            MoveSectionsIntoFixedGrid();
+            return;
+        }
+
+        bool custom = _settings.Layout.UseCustomArrangement;
+
+        FixedLayoutGrid.Visibility = Visibility.Collapsed;
         FlowLayoutPanel.Visibility = custom ? Visibility.Collapsed : Visibility.Visible;
         CustomLayoutCanvas.Visibility = custom ? Visibility.Visible : Visibility.Collapsed;
 
@@ -357,6 +419,33 @@ public partial class MainWindow : FluentWindow
             MoveSectionsIntoCanvas();
         else
             MoveSectionsIntoFlow();
+    }
+
+    /// <summary>
+    /// Normal/Advanced dashboard: Memory Status leads the left column since it's the one
+    /// thing worth checking at a glance, with Insights and Automation stacked beneath it;
+    /// Clean gets the whole right column since it's the primary action and benefits from
+    /// the extra width. Nothing here is draggable — headers only respond to mouse-down
+    /// when Custom arrangement is active, which it never is outside Experimental.
+    /// </summary>
+    private void MoveSectionsIntoFixedGrid()
+    {
+        PlaceInFixedColumn(MemoryStatusSection, FixedLeftColumn, 0);
+        PlaceInFixedColumn(InsightsSection, FixedLeftColumn, 1);
+        PlaceInFixedColumn(AutomationSection, FixedLeftColumn, 2);
+        PlaceInFixedColumn(CleanSection, FixedRightColumn, 0);
+    }
+
+    private static void PlaceInFixedColumn(FrameworkElement el, StackPanel column, int order)
+    {
+        if (!ReferenceEquals(el.Parent, column))
+        {
+            RemoveFromCurrentParent(el);
+            column.Children.Insert(Math.Min(order, column.Children.Count), el);
+        }
+        el.Margin = new Thickness(0, 0, 0, 16);
+        el.Width = double.NaN;  // fills the column — the Grid's MinWidth keeps it from breaking
+        el.Height = double.NaN; // sized to its own content
     }
 
     private void MoveSectionsIntoFlow()

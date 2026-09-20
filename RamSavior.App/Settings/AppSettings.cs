@@ -7,6 +7,18 @@ public enum ThemeChoice
     Dark
 }
 
+/// <summary>Where the Layout/Theme/Automation/History/Settings icon bar sits. Only
+/// user-changeable in Experimental mode — Normal/Advanced always use TopRight.</summary>
+public enum IconBarPosition
+{
+    TopRight,
+    TopCenter,
+    TopLeft,
+    BottomRight,
+    BottomCenter,
+    BottomLeft
+}
+
 public class AppSettings
 {
     public ThemeChoice Theme { get; set; } = ThemeChoice.System;
@@ -126,6 +138,10 @@ public class MainLayoutSettings
     /// As..." in the Layout window, so they can switch between a couple of favorite
     /// setups instead of only ever having the one currently on screen.</summary>
     public Dictionary<string, SavedArrangement> SavedArrangements { get; set; } = new();
+
+    /// <summary>Where the top icon bar sits. Only applied in Experimental mode — Normal
+    /// and Advanced always render it at the default TopRight regardless of this value.</summary>
+    public IconBarPosition IconBarPosition { get; set; } = IconBarPosition.TopRight;
 }
 
 /// <summary>One section's exact position and size on the free-form Experimental canvas.</summary>
