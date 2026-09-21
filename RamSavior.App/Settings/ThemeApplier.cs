@@ -44,9 +44,21 @@ public static class ThemeApplier
 
         // Force every currently-open window to re-pull resources rather than waiting on
         // DynamicResource propagation, which is exactly what's failing per the bug above.
+        //
+        // On top of that: switching the Mica backdrop a second time is a separate,
+        // documented WPF-UI bug (lepoco/wpfui#927, #1193 — "switch theme twice and Mica
+        // breaks"). The window's backdrop composition gets left in a stale state that a
+        // plain re-apply doesn't clear, so every switch after the first renders wrong.
+        // The library's own fix for this (PR #1094) is to explicitly tear the backdrop
+        // down before reapplying it rather than just reapplying on top of whatever's
+        // already attached — do the same here defensively, since it's a harmless no-op
+        // if this WPF-UI version already handles it internally.
+        const Wpf.Ui.Controls.WindowBackdropType backdrop = Wpf.Ui.Controls.WindowBackdropType.Mica;
         foreach (Window window in app.Windows)
         {
+            Wpf.Ui.Controls.WindowBackdrop.RemoveBackdrop(window);
             ApplicationThemeManager.Apply(window);
+            Wpf.Ui.Controls.WindowBackdrop.ApplyBackdrop(window, backdrop);
         }
     }
 

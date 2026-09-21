@@ -47,6 +47,25 @@
                     <CheckBox x:Name="CompactModeCheckBox" Content="Compact Mode" ToolTip="Scales the whole app down — handy on small or low-resolution screens." Checked="CompactModeCheckBox_Changed" Unchecked="CompactModeCheckBox_Changed"/>
                     <TextBlock Margin="0,4,0,10" FontSize="11" Opacity="0.6" TextWrapping="Wrap"
                                Text="Shrinks spacing and text throughout the app. Good fit for smaller or lower-resolution screens."/>
+
+                    <Separator Margin="0,0,0,12"/>
+
+                    <TextBlock Text="Icon Bar Position" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                    <TextBlock Margin="0,0,0,8" FontSize="11" Opacity="0.6" TextWrapping="Wrap"
+                               Text="Where the Layout/Theme/Automation/History/Settings icons sit on the main window. Applies in every mode."/>
+                    <ComboBox x:Name="IconBarPositionCombo"
+                              ToolTip="Move the icon bar to any corner or top/bottom center of the window"
+                              SelectionChanged="IconBarPositionCombo_SelectionChanged">
+                        <ComboBoxItem Content="Top Right"/>
+                        <ComboBoxItem Content="Top Center"/>
+                        <ComboBoxItem Content="Top Left"/>
+                        <ComboBoxItem Content="Bottom Right"/>
+                        <ComboBoxItem Content="Bottom Center"/>
+                        <ComboBoxItem Content="Bottom Left"/>
+                    </ComboBox>
+
+                    <Separator Margin="0,12,0,12"/>
+
                     <TextBlock FontSize="11" Opacity="0.6" TextWrapping="Wrap"
                                Text="Which sections appear on the main window, and (in Experimental mode) their drag-and-drop arrangement, are handled by the Layout icon on the main window itself, not here."/>
                 </StackPanel>

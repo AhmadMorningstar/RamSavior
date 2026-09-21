@@ -24,12 +24,6 @@ public partial class LayoutWindow : FluentWindow
         _isLoaded = true;
     }
 
-    private static readonly IconBarPosition[] IconBarPositionOrder =
-    {
-        IconBarPosition.TopRight, IconBarPosition.TopCenter, IconBarPosition.TopLeft,
-        IconBarPosition.BottomRight, IconBarPosition.BottomCenter, IconBarPosition.BottomLeft
-    };
-
     private void LoadFromSettings()
     {
         var layout = _settings.Layout;
@@ -48,11 +42,6 @@ public partial class LayoutWindow : FluentWindow
         SavedArrangementsPanel.Visibility = layout.UseCustomArrangement && experimental ? Visibility.Visible : Visibility.Collapsed;
 
         RefreshSavedArrangementsCombo();
-
-        IconBarPositionCombo.IsEnabled = experimental;
-        IconBarLockedText.Visibility = experimental ? Visibility.Collapsed : Visibility.Visible;
-        int idx = Array.IndexOf(IconBarPositionOrder, layout.IconBarPosition);
-        IconBarPositionCombo.SelectedIndex = idx >= 0 ? idx : 0;
     }
 
     private void RefreshSavedArrangementsCombo()
@@ -173,22 +162,6 @@ public partial class LayoutWindow : FluentWindow
         SettingsStore.Save(_settings);
 
         StatusText.Text = "Positions reset — sections will cascade back to their default spots.";
-        LayoutChanged?.Invoke();
-    }
-
-    // ----- Icon bar position -----
-
-    private void IconBarPositionCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (!_isLoaded) return;
-
-        int idx = IconBarPositionCombo.SelectedIndex;
-        if (idx < 0 || idx >= IconBarPositionOrder.Length) return;
-
-        _settings.Layout.IconBarPosition = IconBarPositionOrder[idx];
-        SettingsStore.Save(_settings);
-
-        StatusText.Text = $"Icon bar moved to {(string)((ComboBoxItem)IconBarPositionCombo.SelectedItem).Content}.";
         LayoutChanged?.Invoke();
     }
 }

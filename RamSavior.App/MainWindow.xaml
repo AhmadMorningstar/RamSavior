@@ -19,7 +19,7 @@
 
         <ui:TitleBar Title="RAM Savior" Grid.Row="0"/>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+        <ScrollViewer x:Name="BodyScrollViewer" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel x:Name="RootContent" Margin="24,12,24,24">
 
             <!-- Header: Mode selector (always top-left) + a repositionable icon bar. In

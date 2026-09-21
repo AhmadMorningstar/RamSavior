@@ -95,26 +95,6 @@
                 </StackPanel>
             </Border>
 
-            <TextBlock Text="Icon Bar Position" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
-            <Border Background="#14FFFFFF" CornerRadius="8" Padding="16">
-                <StackPanel>
-                    <TextBlock Text="Where the Layout/Theme/Automation/History/Settings icons sit." FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,10"/>
-                    <ComboBox x:Name="IconBarPositionCombo"
-                              ToolTip="Move the icon bar to any corner or top/bottom center of the window"
-                              SelectionChanged="IconBarPositionCombo_SelectionChanged">
-                        <ComboBoxItem Content="Top Right"/>
-                        <ComboBoxItem Content="Top Center"/>
-                        <ComboBoxItem Content="Top Left"/>
-                        <ComboBoxItem Content="Bottom Right"/>
-                        <ComboBoxItem Content="Bottom Center"/>
-                        <ComboBoxItem Content="Bottom Left"/>
-                    </ComboBox>
-                    <TextBlock x:Name="IconBarLockedText" Margin="0,8,0,0" FontSize="10" Opacity="0.8" TextWrapping="Wrap"
-                               Foreground="#E5A21A" Visibility="Collapsed"
-                               Text="Switch the main window's Mode to Experimental to reposition the icon bar. Normal and Advanced always keep it Top Right."/>
-                </StackPanel>
-            </Border>
-
             <TextBlock x:Name="StatusText" Margin="0,16,0,0" Opacity="0.6" FontSize="11"/>
 
         </StackPanel>

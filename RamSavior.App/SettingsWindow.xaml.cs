@@ -19,12 +19,22 @@ public partial class SettingsWindow : FluentWindow
     /// than only partially refreshing.</summary>
     public Action? ThemeOrAccentChanged { get; set; }
 
+    /// <summary>Fired whenever the icon bar position changes, so MainWindow can reparent
+    /// it into the new slot immediately.</summary>
+    public Action? IconBarPositionChanged { get; set; }
+
     /// <summary>Automation itself is configured in the dedicated Automation Configuration
     /// window now — this is kept only because Reset Everything still needs to notify
     /// MainWindow that automation was turned off.</summary>
     public Action? AutomationChanged { get; set; }
     public Action? StartWithWindowsChanged { get; set; }
     public Action? GlobalHotkeyChanged { get; set; }
+
+    private static readonly IconBarPosition[] IconBarPositionOrder =
+    {
+        IconBarPosition.TopRight, IconBarPosition.TopCenter, IconBarPosition.TopLeft,
+        IconBarPosition.BottomRight, IconBarPosition.BottomCenter, IconBarPosition.BottomLeft
+    };
 
     public SettingsWindow(AppSettings settings)
     {
@@ -44,6 +54,9 @@ public partial class SettingsWindow : FluentWindow
         CompactModeCheckBox.IsChecked = _settings.CompactMode;
         StartWithWindowsCheckBox.IsChecked = _settings.StartWithWindows;
         GlobalHotkeyCheckBox.IsChecked = _settings.GlobalHotkeyEnabled;
+
+        int iconBarIdx = Array.IndexOf(IconBarPositionOrder, _settings.Layout.IconBarPosition);
+        IconBarPositionCombo.SelectedIndex = iconBarIdx >= 0 ? iconBarIdx : 0;
 
         _isLoaded = true;
 
@@ -120,6 +133,20 @@ public partial class SettingsWindow : FluentWindow
         SettingsStore.Save(_settings);
         StatusText.Text = _settings.CompactMode ? "Compact Mode enabled." : "Compact Mode disabled.";
         CompactModeChanged?.Invoke();
+    }
+
+    private void IconBarPositionCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_isLoaded) return;
+
+        int idx = IconBarPositionCombo.SelectedIndex;
+        if (idx < 0 || idx >= IconBarPositionOrder.Length) return;
+
+        _settings.Layout.IconBarPosition = IconBarPositionOrder[idx];
+        SettingsStore.Save(_settings);
+
+        StatusText.Text = $"Icon bar moved to {(string)((ComboBoxItem)IconBarPositionCombo.SelectedItem).Content}.";
+        IconBarPositionChanged?.Invoke();
     }
 
     private void StartupSetting_Changed(object sender, RoutedEventArgs e)

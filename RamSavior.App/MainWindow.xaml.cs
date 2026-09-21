@@ -136,35 +136,20 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// Rebuilds the entire visual tree in place by re-running InitializeComponent and all
-    /// UI-populating setup. WPF-UI has a known open issue (lepoco/wpfui#1481) where some
-    /// controls don't fully repaint on a live theme switch — chasing every affected
-    /// control individually is fragile, so this instead throws the whole tree away and
-    /// reconstructs it fresh against the now-current theme resources, which is guaranteed
-    /// correct because it's exactly what happens whenever any new window opens (which is
-    /// why re-opening Settings always "fixed" it). The Window object itself keeps its
-    /// identity — App's reference to it, the tray hooks, the global hotkey target, and the
-    /// Closing-to-tray handler are all untouched, since only the content is rebuilt, not
-    /// the window. Current position/size/state are captured and restored around the
-    /// rebuild so this is invisible to the user beyond the repaint itself.
+    /// Refreshes everything after a theme/accent change. The real fix for the
+    /// icons/colors corruption lives in ThemeApplier.Apply (a documented WPF-UI Mica
+    /// backdrop bug — lepoco/wpfui#927/#1193 — that specifically shows up switching
+    /// themes a second time, exactly matching what was reported); this re-runs the
+    /// dynamic-content setup on top of that as a belt-and-braces refresh, so anything
+    /// built in code (icon glyphs, the composition bar's colors, etc.) is recomputed
+    /// against the new theme too, not just the statically-declared XAML resources.
+    /// Note: re-calling InitializeComponent() here would be a no-op — WPF's generated
+    /// component-connector guards it to run only once per instance — so this works
+    /// directly against the existing tree rather than trying to rebuild it.
     /// </summary>
     internal void ReloadUi()
     {
-        double left = Left, top = Top, width = Width, height = Height;
-        var state = WindowState;
-
-        InitializeComponent();
         InitializeContent();
-
-        if (state == WindowState.Normal)
-        {
-            Left = left;
-            Top = top;
-            Width = width;
-            Height = height;
-        }
-        WindowState = state;
-
         RefreshStatus();
     }
 
@@ -280,12 +265,11 @@ public partial class MainWindow : FluentWindow
             Height = Math.Min(target.MinH, SystemParameters.WorkArea.Height - 40);
     }
 
-    // ----- Icon bar position (Experimental only — Normal/Advanced always use TopRight) -----
+    // ----- Icon bar position (configured in Settings, applies in every mode) -----
 
     private void ApplyIconBarPosition()
     {
-        bool experimental = UiModeComboBox.SelectedIndex >= 2;
-        var position = experimental ? _settings.Layout.IconBarPosition : IconBarPosition.TopRight;
+        var position = _settings.Layout.IconBarPosition;
 
         var target = position switch
         {
@@ -395,6 +379,15 @@ public partial class MainWindow : FluentWindow
 
         if (level < 2)
         {
+            // Disabled (not Auto) is the actual fix here, not just cosmetic: a
+            // horizontally-scrolling ScrollViewer measures its content with infinite
+            // available width, which stops the fixed grid's Star columns from ever
+            // shrinking to fit the window — they'd just sit at their natural size and
+            // force a scrollbar instead of responsively narrowing down to their
+            // MinWidth floor. Disabled gives the grid the real viewport width to work
+            // with, so it actually shrinks smoothly as the window gets smaller.
+            BodyScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+
             FlowLayoutPanel.Visibility = Visibility.Collapsed;
             CustomLayoutCanvas.Visibility = Visibility.Collapsed;
             FixedLayoutGrid.Visibility = Visibility.Visible;
@@ -407,6 +400,11 @@ public partial class MainWindow : FluentWindow
         }
 
         bool custom = _settings.Layout.UseCustomArrangement;
+
+        // The free-form canvas is deliberately much larger than the viewport (room to
+        // drag things around), so it needs real horizontal scrolling; the WrapPanel
+        // doesn't need it since it wraps within whatever width it's given either way.
+        BodyScrollViewer.HorizontalScrollBarVisibility = custom ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
 
         FixedLayoutGrid.Visibility = Visibility.Collapsed;
         FlowLayoutPanel.Visibility = custom ? Visibility.Collapsed : Visibility.Visible;
@@ -1105,6 +1103,14 @@ public partial class MainWindow : FluentWindow
 
     private void BuildCustomItemsPanel()
     {
+        // Preserve whatever's currently checked — this rebuilds on every theme reload
+        // now too, and silently losing an in-progress custom selection because the user
+        // happened to flip Light/Dark would be a nasty surprise.
+        var previouslyChecked = _customCheckboxes
+            .Where(kv => kv.Value.IsChecked == true)
+            .Select(kv => kv.Key)
+            .ToHashSet();
+
         CustomItemsPanel.Children.Clear();
         _customCheckboxes.Clear();
         _customRowContainers.Clear();
@@ -1114,7 +1120,12 @@ public partial class MainWindow : FluentWindow
             var container = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
             var headerRow = new DockPanel();
 
-            var checkBox = new System.Windows.Controls.CheckBox { Content = info.Title, FontWeight = FontWeights.SemiBold };
+            var checkBox = new System.Windows.Controls.CheckBox
+            {
+                Content = info.Title,
+                FontWeight = FontWeights.SemiBold,
+                IsChecked = previouslyChecked.Contains(info.Command)
+            };
             DockPanel.SetDock(checkBox, Dock.Left);
             headerRow.Children.Add(checkBox);
 
@@ -1189,6 +1200,7 @@ public partial class MainWindow : FluentWindow
     {
         settingsWindow.CompactModeChanged = () => ApplyCompactMode();
         settingsWindow.ThemeOrAccentChanged = () => ReloadUi();
+        settingsWindow.IconBarPositionChanged = () => ApplyIconBarPosition();
         settingsWindow.AutomationChanged = () =>
         {
             RefreshAutomationSummary();
