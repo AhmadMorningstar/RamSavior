@@ -84,15 +84,6 @@
                 </StackPanel>
             </Border>
 
-            <TextBlock Text="About Modes" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
-            <Border Background="#14FFFFFF" CornerRadius="8" Padding="16" Margin="0,0,0,16">
-                <StackPanel>
-                    <TextBlock Text="Controlled from the main window" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                    <TextBlock Opacity="0.7" FontSize="11" TextWrapping="Wrap"
-                               Text="Use the Mode dropdown at the top of the main window to switch between Normal, Advanced, and Experimental — it reveals the checkbox picker, Focus Mode, per-process tools, and the custom drag-and-drop layout directly. The wrench icon opens Automation Configuration, a dedicated window for everything about background cleaning."/>
-                </StackPanel>
-            </Border>
-
             <TextBlock Text="Danger Zone" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
             <Border BorderBrush="#E5484D" BorderThickness="1" CornerRadius="8" Padding="16">
                 <StackPanel>

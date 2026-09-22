@@ -151,4 +151,32 @@ public partial class App : System.Windows.Application
 
     /// <summary>Called after Settings changes the Start-with-Windows toggle.</summary>
     public void RefreshStartWithWindowsTask() => SyncStartWithWindowsTask();
+
+    /// <summary>
+    /// Swaps in a freshly-constructed MainWindow and retires the old one — used for
+    /// theme/accent changes. WPF-UI's live in-place theme switching is unreliable after
+    /// more than one switch (documented library bugs: lepoco/wpfui#927, #1193 — the Mica
+    /// backdrop composition gets out of sync with the DWM dark-mode flag), and a plain
+    /// resource re-apply doesn't reliably clear that up. A brand new window always
+    /// renders correctly against the current theme, which is why re-opening Settings
+    /// always "fixed" it — so lean into that instead of fighting the live-switch path.
+    /// Every place that references the old window (tray callbacks, the automation
+    /// callback, the global hotkey) captures the `_mainWindow` field directly rather than
+    /// a snapshot, so updating the field here is enough to redirect all of them.
+    /// </summary>
+    internal void ReplaceMainWindow(MainWindow oldWindow, MainWindow newWindow)
+    {
+        oldWindow.Closing -= MainWindow_Closing;
+
+        _mainWindow = newWindow;
+        MainWindow = newWindow;
+        _mainWindow.Closing += MainWindow_Closing;
+
+        // The hotkey is registered against a specific window's HWND — re-point it at the
+        // new window now that it exists and has been shown (has a valid HWND).
+        RefreshHotKey();
+
+        // No handler attached anymore, so this actually closes rather than hiding to tray.
+        oldWindow.Close();
+    }
 }

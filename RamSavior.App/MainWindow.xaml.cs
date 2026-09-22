@@ -30,7 +30,7 @@ public partial class MainWindow : FluentWindow
     private double _lastAutoWidth;
 
     /// <summary>Populated fresh by InitSectionMap() every time the visual tree is (re)built —
-    /// after a theme-triggered ReloadUi() the old elements are gone, so this must never be
+    /// after a theme-triggered window swap this instance is retired entirely, so this must never be
     /// captured once and assumed to stay valid.</summary>
     private Dictionary<string, FrameworkElement> _sections = new();
     private Dictionary<string, System.Windows.Controls.Primitives.Thumb> _resizeThumbs = new();
@@ -84,8 +84,8 @@ public partial class MainWindow : FluentWindow
     /// Everything needed to populate a freshly-parsed visual tree: building dynamic
     /// panels, wiring the mode/layout/arrangement state, and restoring anything that
     /// isn't itself part of the static XAML (Focus Mode's running state, current theme
-    /// icon, etc). Split out from the constructor specifically so ReloadUi() can re-run
-    /// it against a brand new tree without duplicating any of this.
+    /// icon, etc). Split out from the constructor specifically so it's one place shared
+    /// by both the constructor itself and PerformFullWindowReload's replacement window.
     /// </summary>
     private void InitializeContent()
     {
@@ -136,21 +136,40 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// Refreshes everything after a theme/accent change. The real fix for the
-    /// icons/colors corruption lives in ThemeApplier.Apply (a documented WPF-UI Mica
-    /// backdrop bug — lepoco/wpfui#927/#1193 — that specifically shows up switching
-    /// themes a second time, exactly matching what was reported); this re-runs the
-    /// dynamic-content setup on top of that as a belt-and-braces refresh, so anything
-    /// built in code (icon glyphs, the composition bar's colors, etc.) is recomputed
-    /// against the new theme too, not just the statically-declared XAML resources.
-    /// Note: re-calling InitializeComponent() here would be a no-op — WPF's generated
-    /// component-connector guards it to run only once per instance — so this works
-    /// directly against the existing tree rather than trying to rebuild it.
+    /// Replaces this window with a freshly-constructed one — the actual fix for the
+    /// icons/colors corruption after a theme switch. This isn't cosmetic: WPF-UI's live
+    /// in-place theme switching is unreliable after the first switch (documented library
+    /// bugs — lepoco/wpfui#927, #1193 — the Mica backdrop composition gets left out of
+    /// sync with the DWM dark-mode flag), and a defensive resource/backdrop reset alone
+    /// doesn't reliably clear it. A brand new window always renders correctly against
+    /// whatever theme is currently applied — that's why re-opening Settings always
+    /// "fixed" it — so this leans into that instead of continuing to chase the live-switch
+    /// path. Timers and Focus Mode's trim loop are explicitly stopped first since they're
+    /// not tied to the window's lifetime and Close() alone wouldn't stop them; the rest of
+    /// the handoff (App's reference, tray hooks, the hotkey target, the Closing-to-tray
+    /// handler) is coordinated by App.ReplaceMainWindow.
     /// </summary>
-    internal void ReloadUi()
+    private void PerformFullWindowReload()
     {
-        InitializeContent();
-        RefreshStatus();
+        double left = Left, top = Top, width = Width, height = Height;
+        var state = WindowState;
+
+        _pollTimer.Stop();
+        _leakScanTimer.Stop();
+        if (_focusModeController.IsRunning) _focusModeController.Stop();
+
+        var newWindow = new MainWindow(_settings)
+        {
+            Left = left,
+            Top = top,
+            Width = width,
+            Height = height
+        };
+        newWindow.Show();
+        if (state == WindowState.Maximized)
+            newWindow.WindowState = WindowState.Maximized;
+
+        (System.Windows.Application.Current as App)?.ReplaceMainWindow(this, newWindow);
     }
 
     // ----- Called from App.xaml.cs / tray -----
@@ -302,7 +321,7 @@ public partial class MainWindow : FluentWindow
         _settings.Theme = IsEffectivelyLight() ? ThemeChoice.Dark : ThemeChoice.Light;
         SettingsStore.Save(_settings);
         ThemeApplier.Apply(_settings);
-        ReloadUi();
+        PerformFullWindowReload();
     }
 
     private bool IsEffectivelyLight() => _settings.Theme switch
@@ -1173,11 +1192,23 @@ public partial class MainWindow : FluentWindow
         CustomPanel.Visibility = CustomModeRadio.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    private bool _pendingWindowReload;
+
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
         var settingsWindow = new SettingsWindow(_settings) { Owner = this };
         WireSettingsCallbacks(settingsWindow);
         settingsWindow.ShowDialog();
+
+        // Deferred until Settings actually closes — closing this window (what a theme
+        // reload does) while Settings is still open modally on top of it isn't safe, so
+        // ThemeOrAccentChanged just flags it and this runs once there's no modal child
+        // left owned by this window.
+        if (_pendingWindowReload)
+        {
+            _pendingWindowReload = false;
+            PerformFullWindowReload();
+        }
     }
 
     private void AutomationConfigButton_Click(object sender, RoutedEventArgs e) => OpenAutomationConfig();
@@ -1199,7 +1230,7 @@ public partial class MainWindow : FluentWindow
     private void WireSettingsCallbacks(SettingsWindow settingsWindow)
     {
         settingsWindow.CompactModeChanged = () => ApplyCompactMode();
-        settingsWindow.ThemeOrAccentChanged = () => ReloadUi();
+        settingsWindow.ThemeOrAccentChanged = () => _pendingWindowReload = true;
         settingsWindow.IconBarPositionChanged = () => ApplyIconBarPosition();
         settingsWindow.AutomationChanged = () =>
         {

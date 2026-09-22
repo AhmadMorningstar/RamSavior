@@ -14,9 +14,10 @@ public partial class SettingsWindow : FluentWindow
 
     public Action? CompactModeChanged { get; set; }
 
-    /// <summary>Fired whenever theme or accent color changes — MainWindow uses this to do
-    /// a full ReloadUi(), working around a WPF-UI live-theme-switch repaint bug rather
-    /// than only partially refreshing.</summary>
+    /// <summary>Fired whenever theme or accent color changes — MainWindow uses this to
+    /// swap itself for a freshly-constructed window once this Settings dialog closes,
+    /// working around a WPF-UI live-theme-switch bug rather than only partially
+    /// refreshing.</summary>
     public Action? ThemeOrAccentChanged { get; set; }
 
     /// <summary>Fired whenever the icon bar position changes, so MainWindow can reparent

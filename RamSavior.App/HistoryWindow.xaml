@@ -13,13 +13,23 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
         <ui:TitleBar Title="Recent cleaning history" Grid.Row="0"/>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <WrapPanel x:Name="EntriesPanel" Margin="16" Orientation="Horizontal"/>
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="16,0,16,8">
+            <ui:Button x:Name="ClearHistoryButton"
+                       Content="Clear History"
+                       Icon="{ui:SymbolIcon Symbol=Broom24}"
+                       Appearance="Secondary"
+                       ToolTip="Delete all cleaning history and start fresh — cannot be undone"
+                       Click="ClearHistoryButton_Click"/>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <WrapPanel x:Name="EntriesPanel" Margin="16,0,16,16" Orientation="Horizontal"/>
         </ScrollViewer>
     </Grid>
 </ui:FluentWindow>

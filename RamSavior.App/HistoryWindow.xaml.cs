@@ -7,15 +7,20 @@ namespace RamSavior.App;
 
 public partial class HistoryWindow : FluentWindow
 {
+    private readonly string _logPath;
+
     public HistoryWindow(string logPath)
     {
         InitializeComponent();
-        Load(logPath);
+        _logPath = logPath;
+        Load();
     }
 
-    private void Load(string logPath)
+    private void Load()
     {
-        var entries = JsonLogger.ReadRecent(logPath, 50);
+        EntriesPanel.Children.Clear();
+
+        var entries = JsonLogger.ReadRecent(_logPath, 50);
 
         if (entries.Count == 0)
         {
@@ -67,5 +72,20 @@ public partial class HistoryWindow : FluentWindow
             row.Child = stack;
             EntriesPanel.Children.Add(row);
         }
+    }
+
+    private void ClearHistoryButton_Click(object sender, RoutedEventArgs e)
+    {
+        var result = System.Windows.MessageBox.Show(
+            this,
+            "Delete all cleaning history and start fresh? This cannot be undone.",
+            "Clear History",
+            System.Windows.MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (result != System.Windows.MessageBoxResult.Yes) return;
+
+        JsonLogger.Clear(_logPath);
+        Load();
     }
 }

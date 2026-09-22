@@ -33,13 +33,7 @@
                 </Grid.RowDefinitions>
 
                 <Grid Grid.Row="0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="1*"/>
-                        <ColumnDefinition Width="1*"/>
-                        <ColumnDefinition Width="1*"/>
-                    </Grid.ColumnDefinitions>
-
-                    <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
                         <TextBlock Text="Mode" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,10,0"/>
                         <ComboBox x:Name="UiModeComboBox" Width="160"
                                   ToolTip="Normal: safe automation-friendly cleaning. Advanced: full manual control. Experimental: adds newer per-process, Focus Mode, and a fully custom drag-and-drop layout."
@@ -48,23 +42,24 @@
                             <ComboBoxItem Content="Advanced"/>
                             <ComboBoxItem Content="Experimental"/>
                         </ComboBox>
-                        <TextBlock x:Name="ModeDescriptionText" VerticalAlignment="Center" Margin="12,0,0,0" Opacity="0.6" FontSize="11"/>
-                        <StackPanel x:Name="TopLeftIconSlot" Orientation="Horizontal" Margin="16,0,0,0"/>
+                        <TextBlock x:Name="ModeDescriptionText" VerticalAlignment="Center" Margin="12,0,0,0" Opacity="0.6" FontSize="11"
+                                   TextWrapping="Wrap" MaxWidth="260"/>
+                        <StackPanel x:Name="TopLeftIconSlot" Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center"/>
                     </StackPanel>
 
-                    <StackPanel Grid.Column="1" x:Name="TopCenterIconSlot" Orientation="Horizontal" HorizontalAlignment="Center"/>
-                    <StackPanel Grid.Column="2" x:Name="TopRightIconSlot" Orientation="Horizontal" HorizontalAlignment="Right"/>
+                    <!-- Center/Right icon slots are overlaid in the same cell (no column
+                         competing with the Mode selector above) and just self-align via
+                         HorizontalAlignment — this is deliberate: giving them a fixed
+                         column share was what clipped the Mode description and made a
+                         Top Left icon bar vanish at anything but the widest window sizes. -->
+                    <StackPanel x:Name="TopCenterIconSlot" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <StackPanel x:Name="TopRightIconSlot" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                 </Grid>
 
                 <Grid Grid.Row="1" x:Name="BottomIconRow" Margin="0,10,0,0" Visibility="Collapsed">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="1*"/>
-                        <ColumnDefinition Width="1*"/>
-                        <ColumnDefinition Width="1*"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" x:Name="BottomLeftIconSlot" Orientation="Horizontal" HorizontalAlignment="Left"/>
-                    <StackPanel Grid.Column="1" x:Name="BottomCenterIconSlot" Orientation="Horizontal" HorizontalAlignment="Center"/>
-                    <StackPanel Grid.Column="2" x:Name="BottomRightIconSlot" Orientation="Horizontal" HorizontalAlignment="Right"/>
+                    <StackPanel x:Name="BottomLeftIconSlot" Orientation="Horizontal" HorizontalAlignment="Left"/>
+                    <StackPanel x:Name="BottomCenterIconSlot" Orientation="Horizontal" HorizontalAlignment="Center"/>
+                    <StackPanel x:Name="BottomRightIconSlot" Orientation="Horizontal" HorizontalAlignment="Right"/>
                 </Grid>
             </Grid>
 
