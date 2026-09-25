@@ -152,6 +152,12 @@ public partial class App : System.Windows.Application
     /// <summary>Called after Settings changes the Start-with-Windows toggle.</summary>
     public void RefreshStartWithWindowsTask() => SyncStartWithWindowsTask();
 
+    /// <summary>The live main window. Settings resolves this fresh every time it needs to
+    /// act on it (rather than holding its own reference from when it was opened) — since
+    /// theme changes now swap the main window out immediately while Settings stays open
+    /// and unowned, a captured reference would go stale after the first swap.</summary>
+    internal MainWindow CurrentMainWindow => _mainWindow;
+
     /// <summary>
     /// Swaps in a freshly-constructed MainWindow and retires the old one — used for
     /// theme/accent changes. WPF-UI's live in-place theme switching is unreliable after

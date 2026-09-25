@@ -149,7 +149,7 @@ public partial class MainWindow : FluentWindow
     /// the handoff (App's reference, tray hooks, the hotkey target, the Closing-to-tray
     /// handler) is coordinated by App.ReplaceMainWindow.
     /// </summary>
-    private void PerformFullWindowReload()
+    internal void PerformFullWindowReload()
     {
         double left = Left, top = Top, width = Width, height = Height;
         var state = WindowState;
@@ -160,6 +160,11 @@ public partial class MainWindow : FluentWindow
 
         var newWindow = new MainWindow(_settings)
         {
+            // The XAML default (WindowStartupLocation="CenterScreen", for a nice first
+            // launch) actively overrides Left/Top on Show() otherwise — Manual is what
+            // makes explicitly-set Left/Top actually take effect, which is the whole
+            // point here: reopen exactly where/how big the old window was, not centered.
+            WindowStartupLocation = WindowStartupLocation.Manual,
             Left = left,
             Top = top,
             Width = width,
@@ -202,7 +207,7 @@ public partial class MainWindow : FluentWindow
         }), DispatcherPriority.ContextIdle);
     }
 
-    private void ApplyCompactMode()
+    internal void ApplyCompactMode()
     {
         double scale = _settings.CompactMode ? 0.85 : 1.0;
         RootContent.LayoutTransform = new ScaleTransform(scale, scale);
@@ -286,7 +291,7 @@ public partial class MainWindow : FluentWindow
 
     // ----- Icon bar position (configured in Settings, applies in every mode) -----
 
-    private void ApplyIconBarPosition()
+    internal void ApplyIconBarPosition()
     {
         var position = _settings.Layout.IconBarPosition;
 
@@ -1020,7 +1025,7 @@ public partial class MainWindow : FluentWindow
 
     // ----- Automation quick card -----
 
-    private void RefreshAutomationSummary()
+    internal void RefreshAutomationSummary()
     {
         AutomationQuickToggle.IsChecked = _settings.Automation.Enabled;
 
@@ -1192,23 +1197,17 @@ public partial class MainWindow : FluentWindow
         CustomPanel.Visibility = CustomModeRadio.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private bool _pendingWindowReload;
-
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        var settingsWindow = new SettingsWindow(_settings) { Owner = this };
+        // Deliberately no Owner here: a theme change now swaps this whole window out
+        // immediately while Settings stays open, and WPF force-closes any window an
+        // owner closes — instantly, with no Closing event to even intercept it (this is
+        // documented framework behavior, not something that can be worked around while
+        // keeping Owner set). ShowDialog() still disables this window underneath on its
+        // own, independent of Owner, so it stays just as modal as before.
+        var settingsWindow = new SettingsWindow(_settings);
         WireSettingsCallbacks(settingsWindow);
         settingsWindow.ShowDialog();
-
-        // Deferred until Settings actually closes — closing this window (what a theme
-        // reload does) while Settings is still open modally on top of it isn't safe, so
-        // ThemeOrAccentChanged just flags it and this runs once there's no modal child
-        // left owned by this window.
-        if (_pendingWindowReload)
-        {
-            _pendingWindowReload = false;
-            PerformFullWindowReload();
-        }
     }
 
     private void AutomationConfigButton_Click(object sender, RoutedEventArgs e) => OpenAutomationConfig();
@@ -1227,15 +1226,27 @@ public partial class MainWindow : FluentWindow
         RefreshAutomationSummary();
     }
 
-    private void WireSettingsCallbacks(SettingsWindow settingsWindow)
+    /// <summary>
+    /// Every callback resolves App.CurrentMainWindow fresh at invocation time instead of
+    /// closing over `this` — Settings can now outlive this particular window instance
+    /// (a theme change replaces it while Settings keeps running), so a callback bound to
+    /// `this` would silently start acting on an orphaned, closed window the moment a
+    /// second change was made in the same Settings session. Resolving fresh each time
+    /// means it always lands on whichever window is actually on screen.
+    /// </summary>
+    private static void WireSettingsCallbacks(SettingsWindow settingsWindow)
     {
-        settingsWindow.CompactModeChanged = () => ApplyCompactMode();
-        settingsWindow.ThemeOrAccentChanged = () => _pendingWindowReload = true;
-        settingsWindow.IconBarPositionChanged = () => ApplyIconBarPosition();
+        settingsWindow.CompactModeChanged = () =>
+            (System.Windows.Application.Current as App)?.CurrentMainWindow.ApplyCompactMode();
+        settingsWindow.ThemeOrAccentChanged = () =>
+            (System.Windows.Application.Current as App)?.CurrentMainWindow.PerformFullWindowReload();
+        settingsWindow.IconBarPositionChanged = () =>
+            (System.Windows.Application.Current as App)?.CurrentMainWindow.ApplyIconBarPosition();
         settingsWindow.AutomationChanged = () =>
         {
-            RefreshAutomationSummary();
-            (System.Windows.Application.Current as App)?.RestartAutomationIfNeeded();
+            var app = System.Windows.Application.Current as App;
+            app?.CurrentMainWindow.RefreshAutomationSummary();
+            app?.RestartAutomationIfNeeded();
         };
         settingsWindow.StartWithWindowsChanged = () =>
             (System.Windows.Application.Current as App)?.RefreshStartWithWindowsTask();
