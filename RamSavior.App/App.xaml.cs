@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Threading;
 using System.Windows;
 using RamSavior.App.Automation;
 using RamSavior.App.HotKey;
@@ -12,6 +13,12 @@ public partial class App : System.Windows.Application
 {
     private const string StartupTaskName = "RamSaviorStartup";
 
+    // A fixed, GUID-based name — this HAS to be unique enough that no other unrelated
+    // program could ever collide with it, since a collision would incorrectly treat two
+    // different apps as "the same instance."
+    private const string SingleInstanceMutexName = "RamSavior-SingleInstance-9F3D2C7E-4B8A-4E7C-9C2F-1A6E9D5B7C31";
+
+    private Mutex? _singleInstanceMutex;
     private AppSettings _settings = null!;
     private AutomationController _automationController = null!;
     private TrayIconManager _tray = null!;
@@ -21,6 +28,30 @@ public partial class App : System.Windows.Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        // Single-instance guard, deliberately the very first thing that runs — before
+        // base.OnStartup, before settings load, before any window or background service
+        // exists. A named Mutex is a kernel object, so "does this already exist" is
+        // resolved atomically by the OS itself; that's what makes this safe even against
+        // several launches happening within the same instant (double-clicking the exe
+        // repeatedly, multiple shortcuts, a script spamming it) — only one process can
+        // ever actually be the one that creates it, every other launch just observes
+        // that it already exists. There's no window of time where two launches could
+        // both slip through, unlike a check based on a file or an in-memory flag.
+        _singleInstanceMutex = new Mutex(initiallyOwned: true, name: SingleInstanceMutexName, out bool createdNew);
+        if (!createdNew)
+        {
+            System.Windows.MessageBox.Show(
+                "RAM Savior is already running.",
+                "RAM Savior",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            // Environment.Exit rather than Shutdown() — nothing (no window, no
+            // Dispatcher-driven shutdown sequence) has been created yet to shut down.
+            Environment.Exit(0);
+            return;
+        }
+
         base.OnStartup(e);
 
         // Automation needs the app to keep running even if every window is closed —
@@ -139,6 +170,22 @@ public partial class App : System.Windows.Application
         _hotKeyManager?.Dispose();
         _tray.Dispose();
         Shutdown();
+    }
+
+    /// <summary>
+    /// Releases the single-instance Mutex on every shutdown path (explicit Exit, or
+    /// anything else that ends the process) — not strictly required for the guard to
+    /// keep working on the next launch (an abandoned Mutex is still detected as
+    /// "already exists" by the OS either way), but releasing it cleanly avoids an
+    /// AbandonedMutexException surfacing anywhere that might later try to acquire it.
+    /// </summary>
+    protected override void OnExit(ExitEventArgs e)
+    {
+        try { _singleInstanceMutex?.ReleaseMutex(); }
+        catch { /* already released, or never actually owned this instance's mutex — fine either way */ }
+        _singleInstanceMutex?.Dispose();
+
+        base.OnExit(e);
     }
 
     /// <summary>Called after Settings changes automation config — restarts the poll loop with fresh config.</summary>

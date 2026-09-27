@@ -1233,8 +1233,10 @@ public partial class MainWindow : FluentWindow
     /// `this` would silently start acting on an orphaned, closed window the moment a
     /// second change was made in the same Settings session. Resolving fresh each time
     /// means it always lands on whichever window is actually on screen.
+    /// Internal (not private) so SettingsWindow can re-wire itself the same way after
+    /// replacing itself on a theme change — see SettingsWindow.PerformSelfReplacement.
     /// </summary>
-    private static void WireSettingsCallbacks(SettingsWindow settingsWindow)
+    internal static void WireSettingsCallbacks(SettingsWindow settingsWindow)
     {
         settingsWindow.CompactModeChanged = () =>
             (System.Windows.Application.Current as App)?.CurrentMainWindow.ApplyCompactMode();

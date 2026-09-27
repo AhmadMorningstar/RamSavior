@@ -14,10 +14,10 @@ public partial class SettingsWindow : FluentWindow
 
     public Action? CompactModeChanged { get; set; }
 
-    /// <summary>Fired whenever theme or accent color changes — MainWindow uses this to
-    /// swap itself for a freshly-constructed window once this Settings dialog closes,
-    /// working around a WPF-UI live-theme-switch bug rather than only partially
-    /// refreshing.</summary>
+    /// <summary>Fired (from PerformSelfReplacement, after the replacement Settings window
+    /// has rendered — not immediately) whenever theme or accent color changes. MainWindow
+    /// uses this to swap itself for a freshly-constructed window too, working around a
+    /// WPF-UI live-theme-switch bug rather than only partially refreshing.</summary>
     public Action? ThemeOrAccentChanged { get; set; }
 
     /// <summary>Fired whenever the icon bar position changes, so MainWindow can reparent
@@ -94,9 +94,8 @@ public partial class SettingsWindow : FluentWindow
         _settings.AccentColorHex = preset.Hex;
         SettingsStore.Save(_settings);
         ThemeApplier.Apply(_settings);
-        HighlightSelectedSwatch();
         StatusText.Text = $"Accent set to {preset.Name}.";
-        ThemeOrAccentChanged?.Invoke();
+        PerformSelfReplacement();
     }
 
     private void HighlightSelectedSwatch()
@@ -123,7 +122,48 @@ public partial class SettingsWindow : FluentWindow
         SettingsStore.Save(_settings);
         ThemeApplier.Apply(_settings);
         StatusText.Text = $"Theme set to {_settings.Theme}.";
-        ThemeOrAccentChanged?.Invoke();
+        PerformSelfReplacement();
+    }
+
+    /// <summary>
+    /// This window is just as subject to WPF-UI's live-theme-switch corruption as the
+    /// main window was (same underlying bug — lepoco/wpfui#927/#1193) since it's an
+    /// already-open window having its theme swapped in place. Rather than only fix the
+    /// main window and leave this one still glitching, apply the exact same remedy here:
+    /// replace this window with a freshly-constructed one at the same position/size.
+    ///
+    /// The main-window swap (ThemeOrAccentChanged) is deliberately NOT fired here
+    /// directly — it's deferred to newWindow's ContentRendered event, so this
+    /// replacement Settings window visibly appears and finishes rendering first, and the
+    /// main window only swaps a beat after. newWindow.Activate() afterward then brings
+    /// Settings back on top of whatever the main window's own swap just showed, so it
+    /// ends up front-most either way — Settings lost the Owner-enforced "can never be
+    /// covered by its owner" guarantee when Owner was removed to let the main window
+    /// swap while this stays open, so this restores that ordering by hand.
+    /// </summary>
+    private void PerformSelfReplacement()
+    {
+        double left = Left, top = Top, width = Width, height = Height;
+
+        var newWindow = new SettingsWindow(_settings)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Left = left,
+            Top = top,
+            Width = width,
+            Height = height
+        };
+        MainWindow.WireSettingsCallbacks(newWindow);
+
+        newWindow.ContentRendered += (_, _) =>
+        {
+            ThemeOrAccentChanged?.Invoke();
+            newWindow.Activate();
+        };
+
+        Close();
+
+        newWindow.ShowDialog();
     }
 
     private void CompactModeCheckBox_Changed(object sender, RoutedEventArgs e)
