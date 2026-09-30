@@ -19,178 +19,392 @@
 
         <ui:TitleBar Title="RAM Savior" Grid.Row="0"/>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer x:Name="BodyScrollViewer" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel x:Name="RootContent" Margin="24,12,24,24">
 
-            <!-- Header: Mode selector + History/Settings -->
+            <!-- Header: Mode selector (always top-left) + a repositionable icon bar. In
+                 Normal/Advanced the icon bar is always TopRight; in Experimental it can be
+                 moved to any of 6 zones via the Layout window, reparenting the same IconBar
+                 StackPanel into whichever slot below is active (see ApplyIconBarPosition). -->
             <Grid Margin="0,0,0,16">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
 
-                <StackPanel Grid.Column="0" Orientation="Horizontal">
-                    <TextBlock Text="Mode" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,10,0"/>
-                    <ComboBox x:Name="UiModeComboBox" Width="160" SelectionChanged="UiModeComboBox_SelectionChanged">
-                        <ComboBoxItem Content="Normal"/>
-                        <ComboBoxItem Content="Advanced"/>
-                        <ComboBoxItem Content="Experimental"/>
-                    </ComboBox>
-                    <TextBlock x:Name="ModeDescriptionText" VerticalAlignment="Center" Margin="12,0,0,0" Opacity="0.6" FontSize="11"/>
-                </StackPanel>
+                <Grid Grid.Row="0">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                        <TextBlock Text="Mode" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,10,0"/>
+                        <ComboBox x:Name="UiModeComboBox" Width="160"
+                                  ToolTip="Normal: safe automation-friendly cleaning. Advanced: full manual control. Experimental: adds newer per-process, Focus Mode, and a fully custom drag-and-drop layout."
+                                  SelectionChanged="UiModeComboBox_SelectionChanged">
+                            <ComboBoxItem Content="Normal"/>
+                            <ComboBoxItem Content="Advanced"/>
+                            <ComboBoxItem Content="Experimental"/>
+                        </ComboBox>
+                        <TextBlock x:Name="ModeDescriptionText" VerticalAlignment="Center" Margin="12,0,0,0" Opacity="0.6" FontSize="11"
+                                   TextWrapping="Wrap" MaxWidth="260"/>
+                        <StackPanel x:Name="TopLeftIconSlot" Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
 
-                <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <ui:Button x:Name="HistoryButton"
-                               Icon="{ui:SymbolIcon Symbol=Options24}"
-                               Appearance="Secondary"
-                               Width="32" Height="32" Padding="0" Margin="0,0,6,0"
-                               ToolTip="History"
-                               Click="HistoryButton_Click"/>
-                    <ui:Button x:Name="SettingsButton"
-                               Icon="{ui:SymbolIcon Symbol=Settings24}"
-                               Appearance="Secondary"
-                               Width="32" Height="32" Padding="0"
-                               Click="SettingsButton_Click"/>
-                </StackPanel>
+                    <!-- Center/Right icon slots are overlaid in the same cell (no column
+                         competing with the Mode selector above) and just self-align via
+                         HorizontalAlignment — this is deliberate: giving them a fixed
+                         column share was what clipped the Mode description and made a
+                         Top Left icon bar vanish at anything but the widest window sizes. -->
+                    <StackPanel x:Name="TopCenterIconSlot" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <StackPanel x:Name="TopRightIconSlot" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                </Grid>
+
+                <Grid Grid.Row="1" x:Name="BottomIconRow" Margin="0,10,0,0" Visibility="Collapsed">
+                    <StackPanel x:Name="BottomLeftIconSlot" Orientation="Horizontal" HorizontalAlignment="Left"/>
+                    <StackPanel x:Name="BottomCenterIconSlot" Orientation="Horizontal" HorizontalAlignment="Center"/>
+                    <StackPanel x:Name="BottomRightIconSlot" Orientation="Horizontal" HorizontalAlignment="Right"/>
+                </Grid>
             </Grid>
 
-            <!-- Adaptive multi-column body -->
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="320"/>
-                    <ColumnDefinition Width="24"/>
-                    <ColumnDefinition Width="420"/>
-                    <ColumnDefinition x:Name="ExperimentalGutterColumn" Width="0"/>
-                    <ColumnDefinition x:Name="ExperimentalColumn" Width="0"/>
-                </Grid.ColumnDefinitions>
+            <!-- The icon bar itself: one reusable StackPanel, reparented by code into
+                 whichever slot above is currently active (see ApplyIconBarPosition). -->
+            <StackPanel x:Name="IconBar" Orientation="Horizontal" Visibility="Collapsed">
+                <ui:Button x:Name="LayoutButton"
+                           Icon="{ui:SymbolIcon Symbol=Grid24}"
+                           Appearance="Secondary"
+                           Width="32" Height="32" Padding="0" Margin="0,0,6,0"
+                           ToolTip="Layout — choose which sections appear, and (Experimental) freely drag and resize them"
+                           Visibility="Collapsed"
+                           Click="LayoutButton_Click"/>
+                <ui:Button x:Name="ThemeToggleButton"
+                           Icon="{ui:SymbolIcon Symbol=WeatherMoon24}"
+                           Appearance="Secondary"
+                           Width="32" Height="32" Padding="0" Margin="0,0,6,0"
+                           ToolTip="Quick switch between light and dark appearance"
+                           Click="ThemeToggleButton_Click"/>
+                <ui:Button x:Name="AutomationConfigButton"
+                           Icon="{ui:SymbolIcon Symbol=Wrench24}"
+                           Appearance="Secondary"
+                           Width="32" Height="32" Padding="0" Margin="0,0,6,0"
+                           ToolTip="Automation Configuration — everything about when and what automation cleans, in one dedicated window"
+                           Click="AutomationConfigButton_Click"/>
+                <ui:Button x:Name="HistoryButton"
+                           Icon="{ui:SymbolIcon Symbol=History24}"
+                           Appearance="Secondary"
+                           Width="32" Height="32" Padding="0" Margin="0,0,6,0"
+                           ToolTip="History — recent cleaning results"
+                           Click="HistoryButton_Click"/>
+                <ui:Button x:Name="SettingsButton"
+                           Icon="{ui:SymbolIcon Symbol=Settings24}"
+                           Appearance="Secondary"
+                           Width="32" Height="32" Padding="0"
+                           ToolTip="Settings — appearance, startup, and the Danger Zone"
+                           Click="SettingsButton_Click"/>
+            </StackPanel>
 
-                <!-- LEFT: status, insights, automation — always visible -->
-                <StackPanel Grid.Column="0">
-                    <TextBlock Text="Memory Status" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
-                    <Border Background="#14FFFFFF" CornerRadius="8" Padding="16" Margin="0,0,0,16">
+            <!-- BODY: exactly one of these three is visible at a time -->
+            <Grid>
+
+                <!-- Normal/Advanced: a fixed, non-draggable dashboard layout. Memory Status
+                     is the priority item, top of the left column; Insights and Automation
+                     follow beneath it; Clean gets its own column since it's the primary
+                     action. Column MinWidths keep it from ever breaking as the window is
+                     resized, while still filling whatever width is available. -->
+                <Grid x:Name="FixedLayoutGrid" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1*" MinWidth="300"/>
+                        <ColumnDefinition Width="24"/>
+                        <ColumnDefinition Width="1.15*" MinWidth="360"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" x:Name="FixedLeftColumn" VerticalAlignment="Top"/>
+                    <StackPanel Grid.Column="2" x:Name="FixedRightColumn" VerticalAlignment="Top"/>
+                </Grid>
+
+                <!-- Experimental Automatic: sections just flow and reflow to fill available space -->
+                <WrapPanel x:Name="FlowLayoutPanel" Orientation="Horizontal"/>
+
+                <!-- Experimental Custom: a true free-form canvas. Sections can be dragged
+                     anywhere and resized from their corner grip, with live edge/alignment
+                     snapping (against the canvas edges and other sections), the same feel
+                     as arranging windows on a desktop or panels in an IDE. Populated/managed
+                     entirely in code-behind. -->
+                <Canvas x:Name="CustomLayoutCanvas" MinWidth="1200" MinHeight="720" Visibility="Collapsed">
+                    <Rectangle x:Name="VerticalSnapGuide" Width="2" Fill="#3B82F6" Visibility="Collapsed" IsHitTestVisible="False" Panel.ZIndex="1000"/>
+                    <Rectangle x:Name="HorizontalSnapGuide" Height="2" Fill="#3B82F6" Visibility="Collapsed" IsHitTestVisible="False" Panel.ZIndex="1000"/>
+                </Canvas>
+
+            </Grid>
+
+            <!-- ===== Section definitions (reparented into FlowLayoutPanel or the free-form
+                 Canvas by code). Each is a Border > Grid with a draggable header row, the
+                 actual content, and (Custom mode only) a resize grip in the corner. ===== -->
+
+            <Border x:Name="MemoryStatusSection" Width="320" Margin="0,0,16,16" Visibility="Collapsed">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="Memory Status" Tag="MemoryStatus" Cursor="Hand"
+                               MouseLeftButtonDown="SectionHeader_MouseLeftButtonDown"
+                               MouseMove="SectionHeader_MouseMove"
+                               MouseLeftButtonUp="SectionHeader_MouseLeftButtonUp"
+                               ToolTip="Drag to reposition (Experimental Custom arrangement only)"
+                               FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+                    <Border Grid.Row="1" Background="#14FFFFFF" CornerRadius="8" Padding="16">
                         <StackPanel>
                             <TextBlock x:Name="AvailableText" Text="-- GB available" FontSize="26" FontWeight="Bold"/>
                             <TextBlock x:Name="TotalText" Text="of -- GB total" Opacity="0.6" Margin="0,0,0,12"/>
-                            <ProgressBar x:Name="LoadBar" Minimum="0" Maximum="100" Value="0" Height="8"/>
+                            <ProgressBar x:Name="LoadBar" Minimum="0" Maximum="100" Value="0" Height="8"
+                                         ToolTip="Current overall memory load"/>
                             <TextBlock x:Name="LoadPercentText" Text="0% memory load" Margin="0,4,0,12" Opacity="0.6"/>
 
                             <TextBlock Text="Composition" FontSize="11" FontWeight="SemiBold" Opacity="0.6" Margin="0,0,0,4"/>
-                            <Border CornerRadius="4" Height="14" ClipToBounds="True">
+                            <Border CornerRadius="4" Height="14" ClipToBounds="True"
+                                    ToolTip="How physical memory is currently divided: active, standby cache, modified, free, and zeroed">
                                 <Grid x:Name="CompositionBar"/>
                             </Border>
                             <TextBlock x:Name="CompositionLegendText" Margin="0,6,0,0" FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
                         </StackPanel>
                     </Border>
+                    <Thumb x:Name="MemoryStatusResizeThumb" Tag="MemoryStatus" Grid.Row="0" Grid.RowSpan="2"
+                           Width="16" Height="16" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                           Cursor="SizeNWSE" Background="Transparent" Visibility="Collapsed"
+                           ToolTip="Drag to resize"
+                           DragDelta="ResizeThumb_DragDelta" DragCompleted="ResizeThumb_DragCompleted"/>
+                </Grid>
+            </Border>
 
-                    <TextBlock Text="Insights" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
-                    <Border Background="#14FFFFFF" CornerRadius="8" Padding="16" Margin="0,0,0,16">
+            <Border x:Name="InsightsSection" Width="320" Margin="0,0,16,16" Visibility="Collapsed">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="Insights" Tag="Insights" Cursor="Hand"
+                               MouseLeftButtonDown="SectionHeader_MouseLeftButtonDown"
+                               MouseMove="SectionHeader_MouseMove"
+                               MouseLeftButtonUp="SectionHeader_MouseLeftButtonUp"
+                               ToolTip="Drag to reposition (Experimental Custom arrangement only)"
+                               FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+                    <Border Grid.Row="1" Background="#14FFFFFF" CornerRadius="8" Padding="16">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                <ui:Button x:Name="InsightsStatusTabButton" Content="Status" Appearance="Primary" FontSize="11" Padding="10,4" Margin="0,0,6,0" Click="InsightsTab_Click"/>
-                                <ui:Button x:Name="InsightsHistoryTabButton" Content="History" Appearance="Secondary" FontSize="11" Padding="10,4" Margin="0,0,6,0" Click="InsightsTab_Click"/>
-                                <ui:Button x:Name="InsightsLastCleanedTabButton" Content="Last Cleaned" Appearance="Secondary" FontSize="11" Padding="10,4" Click="InsightsTab_Click"/>
+                                <ui:Button x:Name="InsightsStatusTabButton" Content="Status" Appearance="Primary" FontSize="11" Padding="10,4" Margin="0,0,6,0"
+                                           ToolTip="Top memory users right now" Click="InsightsTab_Click"/>
+                                <ui:Button x:Name="InsightsHistoryTabButton" Content="History" Appearance="Secondary" FontSize="11" Padding="10,4" Margin="0,0,6,0"
+                                           ToolTip="The last few cleaning runs" Click="InsightsTab_Click"/>
+                                <ui:Button x:Name="InsightsLastCleanedTabButton" Content="Last Cleaned" Appearance="Secondary" FontSize="11" Padding="10,4"
+                                           ToolTip="Details of the most recent clean" Click="InsightsTab_Click"/>
                             </StackPanel>
                             <StackPanel x:Name="InsightsContentPanel"/>
                         </StackPanel>
                     </Border>
+                    <Thumb x:Name="InsightsResizeThumb" Tag="Insights" Grid.Row="0" Grid.RowSpan="2"
+                           Width="16" Height="16" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                           Cursor="SizeNWSE" Background="Transparent" Visibility="Collapsed"
+                           ToolTip="Drag to resize"
+                           DragDelta="ResizeThumb_DragDelta" DragCompleted="ResizeThumb_DragCompleted"/>
+                </Grid>
+            </Border>
 
-                    <TextBlock Text="Automation" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
-                    <Border Background="#14FFFFFF" CornerRadius="8" Padding="16">
+            <Border x:Name="AutomationSection" Width="320" Margin="0,0,16,16" Visibility="Collapsed">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="Automation" Tag="Automation" Cursor="Hand"
+                               MouseLeftButtonDown="SectionHeader_MouseLeftButtonDown"
+                               MouseMove="SectionHeader_MouseMove"
+                               MouseLeftButtonUp="SectionHeader_MouseLeftButtonUp"
+                               ToolTip="Drag to reposition (Experimental Custom arrangement only)"
+                               FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+                    <Border Grid.Row="1" Background="#14FFFFFF" CornerRadius="8" Padding="16">
                         <StackPanel>
-                            <CheckBox x:Name="AutomationQuickToggle" Content="Clean automatically" Checked="AutomationQuickToggle_Changed" Unchecked="AutomationQuickToggle_Changed"/>
+                            <CheckBox x:Name="AutomationQuickToggle" Content="Clean automatically"
+                                      ToolTip="Turns background automation on or off using the conditions and items set in Automation Configuration."
+                                      Checked="AutomationQuickToggle_Changed" Unchecked="AutomationQuickToggle_Changed"/>
                             <TextBlock x:Name="AutomationSummaryText" Margin="0,4,0,8" FontSize="11" Opacity="0.6" TextWrapping="Wrap"/>
-                            <ui:Button Content="Configure" Appearance="Secondary" HorizontalAlignment="Left" Click="ConfigureAutomationButton_Click"/>
+                            <ui:Button Content="Configure" Appearance="Secondary" HorizontalAlignment="Left"
+                                       ToolTip="Opens the dedicated Automation Configuration window"
+                                       Click="ConfigureAutomationButton_Click"/>
                         </StackPanel>
                     </Border>
-                </StackPanel>
+                    <Thumb x:Name="AutomationResizeThumb" Tag="Automation" Grid.Row="0" Grid.RowSpan="2"
+                           Width="16" Height="16" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                           Cursor="SizeNWSE" Background="Transparent" Visibility="Collapsed"
+                           ToolTip="Drag to resize"
+                           DragDelta="ResizeThumb_DragDelta" DragCompleted="ResizeThumb_DragCompleted"/>
+                </Grid>
+            </Border>
 
-                <!-- MIDDLE: clean actions -->
-                <StackPanel Grid.Column="2">
-                    <TextBlock Text="Clean" FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
+            <Border x:Name="CleanSection" Width="380" Margin="0,0,16,16" Visibility="Collapsed">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="Clean" Tag="Clean" Cursor="Hand"
+                               MouseLeftButtonDown="SectionHeader_MouseLeftButtonDown"
+                               MouseMove="SectionHeader_MouseMove"
+                               MouseLeftButtonUp="SectionHeader_MouseLeftButtonUp"
+                               ToolTip="Drag to reposition (Experimental Custom arrangement only)"
+                               FontSize="14" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,8"/>
 
-                    <Border Background="#14FFFFFF" CornerRadius="8" Padding="16" Margin="0,0,0,8">
-                        <StackPanel>
-                            <RadioButton x:Name="NormalModeRadio" Content="Normal (recommended)" IsChecked="True" GroupName="CleanTier" Checked="CleanTierRadio_Checked"/>
-                            <TextBlock Text="Targets low-reuse standby cache only. Minimal disk-reload risk. Safe default for automation." Opacity="0.6" FontSize="11" Margin="20,2,0,10" TextWrapping="Wrap"/>
+                    <StackPanel Grid.Row="1">
+                        <Border Background="#14FFFFFF" CornerRadius="8" Padding="16" Margin="0,0,0,8">
+                            <StackPanel>
+                                <RadioButton x:Name="NormalModeRadio" Content="Normal (recommended)" IsChecked="True" GroupName="CleanTier"
+                                             ToolTip="Targets low-reuse standby cache only. Minimal disk-reload risk. Safe default."
+                                             Checked="CleanTierRadio_Checked"/>
+                                <TextBlock Text="Targets low-reuse standby cache only. Minimal disk-reload risk. Safe default for automation." Opacity="0.6" FontSize="11" Margin="20,2,0,10" TextWrapping="Wrap"/>
 
-                            <RadioButton x:Name="ModerateModeRadio" Content="Moderate" GroupName="CleanTier" Checked="CleanTierRadio_Checked"/>
-                            <TextBlock Text="Also flushes working sets for a bit more freed memory. Still low risk." Opacity="0.6" FontSize="11" Margin="20,2,0,0" TextWrapping="Wrap"/>
+                                <RadioButton x:Name="ModerateModeRadio" Content="Moderate" GroupName="CleanTier"
+                                             ToolTip="Also flushes working sets for a bit more freed memory. Still low risk."
+                                             Checked="CleanTierRadio_Checked"/>
+                                <TextBlock Text="Also flushes working sets for a bit more freed memory. Still low risk." Opacity="0.6" FontSize="11" Margin="20,2,0,0" TextWrapping="Wrap"/>
 
-                            <StackPanel x:Name="CustomTierOption" Visibility="Collapsed">
-                                <RadioButton x:Name="CustomModeRadio" Content="Custom — pick exactly" GroupName="CleanTier" Margin="0,10,0,0" Checked="CleanTierRadio_Checked"/>
-                                <TextBlock Text="Pick exactly which cleanup actions run, including options that may briefly affect responsiveness." Opacity="0.6" FontSize="11" Margin="20,2,0,0" TextWrapping="Wrap"/>
+                                <StackPanel x:Name="CustomTierOption" Visibility="Collapsed">
+                                    <RadioButton x:Name="CustomModeRadio" Content="Custom — pick exactly" GroupName="CleanTier" Margin="0,10,0,0"
+                                                 ToolTip="Choose exactly which cleanup actions run right now."
+                                                 Checked="CleanTierRadio_Checked"/>
+                                    <TextBlock Text="Pick exactly which cleanup actions run, including options that may briefly affect responsiveness." Opacity="0.6" FontSize="11" Margin="20,2,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
                             </StackPanel>
-                        </StackPanel>
-                    </Border>
+                        </Border>
 
-                    <Border x:Name="CustomPanel" Background="#14FFFFFF" CornerRadius="8" Padding="16" Margin="0,0,0,8" Visibility="Collapsed">
-                        <StackPanel x:Name="CustomItemsPanel"/>
-                    </Border>
+                        <Border x:Name="CustomPanel" Background="#14FFFFFF" CornerRadius="8" Padding="16" Margin="0,0,0,8" Visibility="Collapsed">
+                            <StackPanel x:Name="CustomItemsPanel"/>
+                        </Border>
 
-                    <CheckBox x:Name="DryRunCheckBox" Content="Dry run (show what would happen, change nothing)" Margin="0,4,0,4"/>
+                        <CheckBox x:Name="DryRunCheckBox" Content="Dry run (show what would happen, change nothing)" Margin="0,4,0,4"
+                                  ToolTip="Preview which actions would run and how much might be freed, without touching memory."/>
 
-                    <ui:Button x:Name="CleanButton"
-                               Content="Purge Memory Now"
-                               Appearance="Primary"
-                               Icon="{ui:SymbolIcon Symbol=Broom24}"
-                               Height="44"
-                               FontWeight="SemiBold"
-                               Margin="0,4,0,0"
-                               Click="CleanButton_Click"/>
+                        <ui:Button x:Name="CleanButton"
+                                   Content="Purge Memory Now"
+                                   Appearance="Primary"
+                                   Icon="{ui:SymbolIcon Symbol=Broom24}"
+                                   Height="44"
+                                   FontWeight="SemiBold"
+                                   Margin="0,4,0,0"
+                                   ToolTip="Run the cleanup tier selected above right now"
+                                   Click="CleanButton_Click"/>
 
-                    <TextBlock x:Name="ResultText" Margin="0,12,0,0" TextWrapping="Wrap" Opacity="0.8"/>
-                </StackPanel>
+                        <TextBlock x:Name="ResultText" Margin="0,12,0,0" TextWrapping="Wrap" Opacity="0.8"/>
+                    </StackPanel>
 
-                <!-- RIGHT: Experimental-only tools, given a real column instead of stacking below -->
-                <StackPanel Grid.Column="4" x:Name="ExperimentalArea" Visibility="Collapsed">
+                    <Thumb x:Name="CleanResizeThumb" Tag="Clean" Grid.Row="0" Grid.RowSpan="2"
+                           Width="16" Height="16" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                           Cursor="SizeNWSE" Background="Transparent" Visibility="Collapsed"
+                           ToolTip="Drag to resize"
+                           DragDelta="ResizeThumb_DragDelta" DragCompleted="ResizeThumb_DragCompleted"/>
+                </Grid>
+            </Border>
 
-                    <Grid Margin="0,0,0,8">
+            <Border x:Name="FocusModeSection" Width="380" Margin="0,0,16,16" Visibility="Collapsed">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0" Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Focus Mode" FontSize="14" FontWeight="SemiBold" Opacity="0.7" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="0" Text="Focus Mode" Tag="FocusMode" Cursor="Hand"
+                                   MouseLeftButtonDown="SectionHeader_MouseLeftButtonDown"
+                                   MouseMove="SectionHeader_MouseMove"
+                                   MouseLeftButtonUp="SectionHeader_MouseLeftButtonUp"
+                                   ToolTip="Drag to reposition (Experimental Custom arrangement only)"
+                                   FontSize="14" FontWeight="SemiBold" Opacity="0.7" VerticalAlignment="Center"/>
                         <Border Grid.Column="1" Background="#E5484D" CornerRadius="4" Padding="6,1,6,1">
                             <TextBlock Text="EXPERIMENTAL" FontSize="9" FontWeight="Bold" Foreground="White"/>
                         </Border>
                     </Grid>
 
-                    <Border Background="#14FFFFFF" CornerRadius="8" Padding="16" Margin="0,0,0,20">
+                    <Border Grid.Row="1" Background="#14FFFFFF" CornerRadius="8" Padding="16">
                         <StackPanel>
                             <TextBlock Text="Pick apps to protect — everything else gets trimmed repeatedly while this runs." FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,10"/>
 
-                            <TextBox x:Name="FocusSearchBox" Margin="0,0,0,8" TextChanged="FocusSearchBox_TextChanged"/>
-                            <TextBlock Text="Right-click a name to protect it, left-click to remove it. Type above to search." FontSize="10" Opacity="0.5" Margin="0,-6,0,8" TextWrapping="Wrap"/>
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0" x:Name="FocusSearchBox" Margin="0,0,8,0"
+                                         ToolTip="Filter the list below by app name" TextChanged="FocusSearchBox_TextChanged"/>
+                                <ui:Button Grid.Column="1" x:Name="DeselectAllFocusButton"
+                                           Icon="{ui:SymbolIcon Symbol=Eraser24}"
+                                           Appearance="Secondary" Width="32" Height="32" Padding="0"
+                                           ToolTip="Deselect all protected apps"
+                                           Click="DeselectAllFocusButton_Click"/>
+                            </Grid>
+                            <TextBlock Text="Right-click a name to protect it, left-click to remove it. Type above to search." FontSize="10" Opacity="0.5" Margin="0,0,0,8" TextWrapping="Wrap"/>
 
-                            <Border BorderBrush="#33FFFFFF" BorderThickness="1" CornerRadius="4" Height="180" Margin="0,0,0,8">
-                                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                    <StackPanel x:Name="FocusKeepPanel" Margin="8"/>
-                                </ScrollViewer>
-                            </Border>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition x:Name="FocusListRow" Height="180"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Border Grid.Row="0" BorderBrush="#33FFFFFF" BorderThickness="1" CornerRadius="4,4,0,0">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <StackPanel x:Name="FocusKeepPanel" Margin="8"/>
+                                    </ScrollViewer>
+                                </Border>
+                                <Thumb Grid.Row="1" x:Name="FocusListResizeThumb"
+                                       Height="8" Cursor="SizeNS" Background="#22FFFFFF"
+                                       HorizontalAlignment="Stretch"
+                                       ToolTip="Drag to resize the protected-apps list"
+                                       DragDelta="FocusListResizeThumb_DragDelta"
+                                       DragCompleted="FocusListResizeThumb_DragCompleted"/>
+                            </Grid>
 
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <ui:Button Content="Add Folder..." Appearance="Secondary" FontSize="11" Margin="0,0,8,0" Click="AddFocusFolderButton_Click"/>
-                                <ui:Button Content="Add File..." Appearance="Secondary" FontSize="11" Margin="0,0,8,0" Click="AddFocusFileButton_Click"/>
-                                <ui:Button Icon="{ui:SymbolIcon Symbol=ArrowSync24}" Appearance="Secondary" Width="32" Padding="0" Click="RefreshFocusListButton_Click"/>
+                                <ui:Button Content="Add Folder..." Appearance="Secondary" FontSize="11" Margin="0,0,8,0"
+                                           ToolTip="Protect every .exe found directly inside a folder" Click="AddFocusFolderButton_Click"/>
+                                <ui:Button Content="Add File..." Appearance="Secondary" FontSize="11" Margin="0,0,8,0"
+                                           ToolTip="Protect a single chosen .exe" Click="AddFocusFileButton_Click"/>
+                                <ui:Button Icon="{ui:SymbolIcon Symbol=ArrowSync24}" Appearance="Secondary" Width="32" Padding="0"
+                                           ToolTip="Refresh the list of running apps" Click="RefreshFocusListButton_Click"/>
                             </StackPanel>
 
-                            <ui:Button x:Name="FocusModeToggleButton" Content="Start Focus Mode" Appearance="Primary" Height="40" Click="FocusModeToggleButton_Click"/>
+                            <ui:Button x:Name="FocusModeToggleButton" Content="Start Focus Mode" Appearance="Primary" Height="40"
+                                       ToolTip="Repeatedly trims everything except the apps you've protected above"
+                                       Click="FocusModeToggleButton_Click"/>
                             <TextBlock x:Name="FocusModeStatusText" Margin="0,8,0,0" FontSize="11" Opacity="0.8" TextWrapping="Wrap"/>
                         </StackPanel>
                     </Border>
 
-                    <Grid Margin="0,0,0,8">
+                    <Thumb x:Name="FocusModeResizeThumb" Tag="FocusMode" Grid.Row="0" Grid.RowSpan="2"
+                           Width="16" Height="16" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                           Cursor="SizeNWSE" Background="Transparent" Visibility="Collapsed"
+                           ToolTip="Drag to resize"
+                           DragDelta="ResizeThumb_DragDelta" DragCompleted="ResizeThumb_DragCompleted"/>
+                </Grid>
+            </Border>
+
+            <Border x:Name="PerProcessTrimSection" Width="380" Margin="0,0,16,16" Visibility="Collapsed">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0" Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Per-Process Trim" FontSize="14" FontWeight="SemiBold" Opacity="0.7" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="0" Text="Per-Process Trim" Tag="PerProcessTrim" Cursor="Hand"
+                                   MouseLeftButtonDown="SectionHeader_MouseLeftButtonDown"
+                                   MouseMove="SectionHeader_MouseMove"
+                                   MouseLeftButtonUp="SectionHeader_MouseLeftButtonUp"
+                                   ToolTip="Drag to reposition (Experimental Custom arrangement only)"
+                                   FontSize="14" FontWeight="SemiBold" Opacity="0.7" VerticalAlignment="Center"/>
                         <Border Grid.Column="1" Background="#E5484D" CornerRadius="4" Padding="6,1,6,1">
                             <TextBlock Text="EXPERIMENTAL" FontSize="9" FontWeight="Bold" Foreground="White"/>
                         </Border>
                     </Grid>
 
-                    <Border Background="#14FFFFFF" CornerRadius="8" Padding="16">
+                    <Border Grid.Row="1" Background="#14FFFFFF" CornerRadius="8" Padding="16">
                         <StackPanel>
                             <TextBlock Text="Trim a specific process" FontWeight="SemiBold" Margin="0,0,0,2"/>
                             <TextBlock Text="Uses the official Windows EmptyWorkingSet API on one chosen app instead of purging system-wide." Opacity="0.6" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"/>
@@ -200,10 +414,12 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <ComboBox Grid.Column="0" x:Name="ProcessComboBox" Margin="0,0,8,0"/>
+                                <ComboBox Grid.Column="0" x:Name="ProcessComboBox" Margin="0,0,8,0"
+                                          ToolTip="Choose a running process to trim"/>
                                 <ui:Button Grid.Column="1" x:Name="RefreshProcessesButton"
                                            Icon="{ui:SymbolIcon Symbol=ArrowSync24}"
                                            Appearance="Secondary" Width="36" Height="36" Padding="0"
+                                           ToolTip="Refresh the process list"
                                            Click="RefreshProcessesButton_Click"/>
                             </Grid>
 
@@ -212,15 +428,21 @@
                                        Appearance="Secondary"
                                        Height="36"
                                        Margin="0,10,0,0"
+                                       ToolTip="Empties the working set of the selected process only"
                                        Click="TrimProcessButton_Click"/>
 
                             <TextBlock x:Name="ExperimentalResultText" Margin="0,8,0,0" FontSize="11" TextWrapping="Wrap" Opacity="0.8"/>
                             <TextBlock x:Name="LeakSuspectsText" Margin="0,8,0,0" FontSize="11" TextWrapping="Wrap" Opacity="0.8" Foreground="#E5A21A"/>
                         </StackPanel>
                     </Border>
-                </StackPanel>
 
-            </Grid>
+                    <Thumb x:Name="PerProcessTrimResizeThumb" Tag="PerProcessTrim" Grid.Row="0" Grid.RowSpan="2"
+                           Width="16" Height="16" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                           Cursor="SizeNWSE" Background="Transparent" Visibility="Collapsed"
+                           ToolTip="Drag to resize"
+                           DragDelta="ResizeThumb_DragDelta" DragCompleted="ResizeThumb_DragCompleted"/>
+                </Grid>
+            </Border>
 
         </StackPanel>
         </ScrollViewer>

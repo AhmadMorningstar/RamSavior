@@ -27,6 +27,38 @@ public partial class MainWindow : FluentWindow
 
     private string _insightsTab = "Status";
     private bool _isLoaded;
+    private double _lastAutoWidth;
+
+    /// <summary>Populated fresh by InitSectionMap() every time the visual tree is (re)built —
+    /// after a theme-triggered window swap this instance is retired entirely, so this must never be
+    /// captured once and assumed to stay valid.</summary>
+    private Dictionary<string, FrameworkElement> _sections = new();
+    private Dictionary<string, System.Windows.Controls.Primitives.Thumb> _resizeThumbs = new();
+    private static readonly string[] SectionOrder =
+        { "MemoryStatus", "Insights", "Automation", "Clean", "FocusMode", "PerProcessTrim" };
+
+    private static readonly Dictionary<string, double> DefaultFlowWidth = new()
+    {
+        ["MemoryStatus"] = 320, ["Insights"] = 320, ["Automation"] = 320,
+        ["Clean"] = 380, ["FocusMode"] = 380, ["PerProcessTrim"] = 380,
+    };
+
+    // Free-form canvas drag state (Experimental Custom arrangement).
+    private const double SnapThreshold = 8;
+    private bool _isDraggingSection;
+    private FrameworkElement? _draggedSection;
+    private System.Windows.Point _dragStartMouse;
+    private double _dragStartLeft, _dragStartTop;
+
+    // Per-mode sizing so switching modes doesn't leave the window too small (text/buttons
+    // crowded) or oddly oversized. MinWidth/MinHeight are hard floors; PreferredWidth is
+    // only applied when the window still looks like it's at its previous mode's auto size
+    // (i.e. the user hasn't manually resized it) — see ApplyModeSizing. Normal/Advanced use
+    // the fixed two-column dashboard (MinWidth accounts for both columns' own MinWidth plus
+    // margins); Experimental's free-form canvas keeps its own low floor untouched.
+    private static readonly (double MinW, double MinH, double PreferredW) NormalSize = (760, 560, 940);
+    private static readonly (double MinW, double MinH, double PreferredW) AdvancedSize = (760, 620, 1000);
+    private static readonly (double MinW, double MinH, double PreferredW) ExperimentalSize = (480, 620, 1400);
 
     public MainWindow(AppSettings settings)
     {
@@ -35,15 +67,7 @@ public partial class MainWindow : FluentWindow
         _focusModeController = new FocusModeController(_settings);
         _focusModeController.TickCompleted += result => Dispatcher.Invoke(() => OnFocusModeTick(result));
 
-        BuildCustomItemsPanel();
-        ApplyCompactMode();
-
-        _isLoaded = false;
-        UiModeComboBox.SelectedIndex = _settings.EnableExperimentalFeatures ? 2 : _settings.EnableAdvancedCleaning ? 1 : 0;
-        ApplyUiMode();
-        RefreshAutomationSummary();
-        RefreshInsights();
-        _isLoaded = true;
+        InitializeContent();
 
         _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         _pollTimer.Tick += (_, _) => RefreshStatus();
@@ -54,6 +78,103 @@ public partial class MainWindow : FluentWindow
         _leakScanTimer.Start();
 
         RefreshStatus();
+    }
+
+    /// <summary>
+    /// Everything needed to populate a freshly-parsed visual tree: building dynamic
+    /// panels, wiring the mode/layout/arrangement state, and restoring anything that
+    /// isn't itself part of the static XAML (Focus Mode's running state, current theme
+    /// icon, etc). Split out from the constructor specifically so it's one place shared
+    /// by both the constructor itself and PerformFullWindowReload's replacement window.
+    /// </summary>
+    private void InitializeContent()
+    {
+        InitSectionMap();
+        _isDraggingSection = false;
+        _draggedSection = null;
+
+        BuildCustomItemsPanel();
+        ApplyCompactMode();
+        FocusListRow.Height = new GridLength(Math.Clamp(_settings.FocusMode.ListHeight, 80, 500));
+        UpdateThemeToggleIcon();
+
+        _isLoaded = false;
+        UiModeComboBox.SelectedIndex = _settings.EnableExperimentalFeatures ? 2 : _settings.EnableAdvancedCleaning ? 1 : 0;
+        ApplyUiMode();
+        RefreshAutomationSummary();
+        RefreshInsights();
+        _isLoaded = true;
+
+        if (_focusModeController.IsRunning)
+        {
+            FocusModeToggleButton.Content = "Stop Focus Mode";
+            FocusModeToggleButton.Appearance = ControlAppearance.Danger;
+            FocusModeStatusText.Text = $"Focus Mode running \u2014 protecting: {string.Join(", ", _focusSelectedNames)}. Trimming everything else every {_settings.FocusMode.IntervalSeconds}s.";
+        }
+    }
+
+    private void InitSectionMap()
+    {
+        _sections = new Dictionary<string, FrameworkElement>
+        {
+            ["MemoryStatus"] = MemoryStatusSection,
+            ["Insights"] = InsightsSection,
+            ["Automation"] = AutomationSection,
+            ["Clean"] = CleanSection,
+            ["FocusMode"] = FocusModeSection,
+            ["PerProcessTrim"] = PerProcessTrimSection,
+        };
+        _resizeThumbs = new Dictionary<string, System.Windows.Controls.Primitives.Thumb>
+        {
+            ["MemoryStatus"] = MemoryStatusResizeThumb,
+            ["Insights"] = InsightsResizeThumb,
+            ["Automation"] = AutomationResizeThumb,
+            ["Clean"] = CleanResizeThumb,
+            ["FocusMode"] = FocusModeResizeThumb,
+            ["PerProcessTrim"] = PerProcessTrimResizeThumb,
+        };
+    }
+
+    /// <summary>
+    /// Replaces this window with a freshly-constructed one — the actual fix for the
+    /// icons/colors corruption after a theme switch. This isn't cosmetic: WPF-UI's live
+    /// in-place theme switching is unreliable after the first switch (documented library
+    /// bugs — lepoco/wpfui#927, #1193 — the Mica backdrop composition gets left out of
+    /// sync with the DWM dark-mode flag), and a defensive resource/backdrop reset alone
+    /// doesn't reliably clear it. A brand new window always renders correctly against
+    /// whatever theme is currently applied — that's why re-opening Settings always
+    /// "fixed" it — so this leans into that instead of continuing to chase the live-switch
+    /// path. Timers and Focus Mode's trim loop are explicitly stopped first since they're
+    /// not tied to the window's lifetime and Close() alone wouldn't stop them; the rest of
+    /// the handoff (App's reference, tray hooks, the hotkey target, the Closing-to-tray
+    /// handler) is coordinated by App.ReplaceMainWindow.
+    /// </summary>
+    internal void PerformFullWindowReload()
+    {
+        double left = Left, top = Top, width = Width, height = Height;
+        var state = WindowState;
+
+        _pollTimer.Stop();
+        _leakScanTimer.Stop();
+        if (_focusModeController.IsRunning) _focusModeController.Stop();
+
+        var newWindow = new MainWindow(_settings)
+        {
+            // The XAML default (WindowStartupLocation="CenterScreen", for a nice first
+            // launch) actively overrides Left/Top on Show() otherwise — Manual is what
+            // makes explicitly-set Left/Top actually take effect, which is the whole
+            // point here: reopen exactly where/how big the old window was, not centered.
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Left = left,
+            Top = top,
+            Width = width,
+            Height = height
+        };
+        newWindow.Show();
+        if (state == WindowState.Maximized)
+            newWindow.WindowState = WindowState.Maximized;
+
+        (System.Windows.Application.Current as App)?.ReplaceMainWindow(this, newWindow);
     }
 
     // ----- Called from App.xaml.cs / tray -----
@@ -86,7 +207,7 @@ public partial class MainWindow : FluentWindow
         }), DispatcherPriority.ContextIdle);
     }
 
-    private void ApplyCompactMode()
+    internal void ApplyCompactMode()
     {
         double scale = _settings.CompactMode ? 0.85 : 1.0;
         RootContent.LayoutTransform = new ScaleTransform(scale, scale);
@@ -113,26 +234,472 @@ public partial class MainWindow : FluentWindow
         ModeDescriptionText.Text = level switch
         {
             1 => "Full manual control over exactly what gets cleaned.",
-            2 => "Advanced, plus per-process tools that are newer and less battle-tested.",
+            2 => "Advanced, plus per-process tools and a custom drag-to-arrange layout.",
             _ => "Safe, automation-friendly cleaning using known Windows APIs."
         };
 
         CustomTierOption.Visibility = level >= 1 ? Visibility.Visible : Visibility.Collapsed;
-
-        bool showExperimental = level >= 2;
-        ExperimentalArea.Visibility = showExperimental ? Visibility.Visible : Visibility.Collapsed;
-        ExperimentalGutterColumn.Width = showExperimental ? new GridLength(24) : new GridLength(0);
-        ExperimentalColumn.Width = showExperimental ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        LayoutButton.Visibility = level >= 2 ? Visibility.Visible : Visibility.Collapsed;
 
         if (level < 1 && CustomModeRadio.IsChecked == true)
             NormalModeRadio.IsChecked = true;
 
         ApplyAdvancedCheckboxAvailability();
+        ApplyLayoutVisibility();
+        ApplyArrangementMode();
+        ApplyIconBarPosition();
+        ApplyModeSizing(level);
 
-        if (showExperimental && ProcessComboBox.Items.Count == 0)
+        if (level >= 2 && ProcessComboBox.Items.Count == 0)
             RefreshProcessList();
-        if (showExperimental && _focusPickerNames.Count == 0)
+        if (level >= 2 && _focusPickerNames.Count == 0)
             PopulateFocusList();
+    }
+
+    /// <summary>
+    /// Grows the window (and raises its floor) to fit whichever mode is now active,
+    /// instead of leaving the user to drag it wider/narrower by hand every time they
+    /// switch modes — that manual-resize dance was the original complaint. Only ever
+    /// grows automatically; if the user has deliberately made the window wider than the
+    /// mode's preferred size, that choice is left alone.
+    /// </summary>
+    private void ApplyModeSizing(int level)
+    {
+        var target = level switch
+        {
+            2 => ExperimentalSize,
+            1 => AdvancedSize,
+            _ => NormalSize
+        };
+
+        MinWidth = target.MinW;
+        MinHeight = target.MinH;
+
+        if (WindowState != WindowState.Normal) return; // don't fight a maximized/minimized window
+
+        bool looksAutoSized = !_isLoaded || Width <= _lastAutoWidth + 0.5;
+
+        if (looksAutoSized || Width < target.MinW)
+        {
+            Width = Math.Max(target.PreferredW, target.MinW);
+            _lastAutoWidth = Width;
+        }
+
+        if (Height < target.MinH)
+            Height = Math.Min(target.MinH, SystemParameters.WorkArea.Height - 40);
+    }
+
+    // ----- Icon bar position (configured in Settings, applies in every mode) -----
+
+    internal void ApplyIconBarPosition()
+    {
+        var position = _settings.Layout.IconBarPosition;
+
+        var target = position switch
+        {
+            IconBarPosition.TopLeft => TopLeftIconSlot,
+            IconBarPosition.TopCenter => TopCenterIconSlot,
+            IconBarPosition.BottomLeft => BottomLeftIconSlot,
+            IconBarPosition.BottomCenter => BottomCenterIconSlot,
+            IconBarPosition.BottomRight => BottomRightIconSlot,
+            _ => TopRightIconSlot
+        };
+
+        if (!ReferenceEquals(IconBar.Parent, target))
+        {
+            RemoveFromCurrentParent(IconBar);
+            target.Children.Add(IconBar);
+        }
+        IconBar.Visibility = Visibility.Visible;
+
+        bool bottom = position is IconBarPosition.BottomLeft or IconBarPosition.BottomCenter or IconBarPosition.BottomRight;
+        BottomIconRow.Visibility = bottom ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // ----- Quick light/dark appearance toggle -----
+
+    private void ThemeToggleButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Deliberately resolves to a concrete Light/Dark choice rather than toggling
+        // "System" — once someone reaches for a manual quick-switch they want a definite
+        // answer, and the icon needs to reliably reflect the app's actual appearance.
+        _settings.Theme = IsEffectivelyLight() ? ThemeChoice.Dark : ThemeChoice.Light;
+        SettingsStore.Save(_settings);
+        ThemeApplier.Apply(_settings);
+        PerformFullWindowReload();
+    }
+
+    private bool IsEffectivelyLight() => _settings.Theme switch
+    {
+        ThemeChoice.Light => true,
+        ThemeChoice.Dark => false,
+        _ => ThemeApplier.IsWindowsUsingLightTheme()
+    };
+
+    private void UpdateThemeToggleIcon()
+    {
+        bool light = IsEffectivelyLight();
+        ThemeToggleButton.Icon = new Wpf.Ui.Controls.SymbolIcon
+        {
+            Symbol = light ? Wpf.Ui.Controls.SymbolRegular.WeatherSunny24 : Wpf.Ui.Controls.SymbolRegular.WeatherMoon24
+        };
+        ThemeToggleButton.ToolTip = light ? "Switch to dark appearance" : "Switch to light appearance";
+    }
+
+    // ----- Layout picker (Experimental only): visibility + arrangement (auto vs custom) -----
+
+    private void LayoutButton_Click(object sender, RoutedEventArgs e)
+    {
+        var layoutWindow = new LayoutWindow(_settings) { Owner = this };
+        layoutWindow.LayoutChanged = () =>
+        {
+            ApplyLayoutVisibility();
+            ApplyArrangementMode();
+            ApplyIconBarPosition();
+        };
+        layoutWindow.ShowDialog();
+    }
+
+    private void ApplyLayoutVisibility()
+    {
+        var layout = _settings.Layout;
+        bool experimental = UiModeComboBox.SelectedIndex >= 2;
+
+        if (experimental)
+        {
+            MemoryStatusSection.Visibility = layout.ShowMemoryStatus ? Visibility.Visible : Visibility.Collapsed;
+            InsightsSection.Visibility = layout.ShowInsights ? Visibility.Visible : Visibility.Collapsed;
+            AutomationSection.Visibility = layout.ShowAutomation ? Visibility.Visible : Visibility.Collapsed;
+            CleanSection.Visibility = layout.ShowClean ? Visibility.Visible : Visibility.Collapsed;
+            FocusModeSection.Visibility = layout.ShowFocusMode ? Visibility.Visible : Visibility.Collapsed;
+            PerProcessTrimSection.Visibility = layout.ShowPerProcessTrim ? Visibility.Visible : Visibility.Collapsed;
+        }
+        else
+        {
+            // Normal/Advanced use a fixed dashboard that always shows all four relevant
+            // sections — the Layout picker (where visibility is customized) only appears
+            // in Experimental, so honoring stale flags here would just be confusing:
+            // there'd be no way to see why a section vanished.
+            MemoryStatusSection.Visibility = Visibility.Visible;
+            InsightsSection.Visibility = Visibility.Visible;
+            AutomationSection.Visibility = Visibility.Visible;
+            CleanSection.Visibility = Visibility.Visible;
+            FocusModeSection.Visibility = Visibility.Collapsed;
+            PerProcessTrimSection.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// Picks the body container for the current mode. Normal/Advanced always get the
+    /// fixed, non-draggable dashboard (FixedLayoutGrid) — untouched by any Layout/Custom
+    /// setting, since those only apply in Experimental. Experimental keeps its existing
+    /// two arrangements exactly as they were: the automatic reflowing WrapPanel, or the
+    /// free-form drag/resize/snap canvas. Reparents the actual section elements between
+    /// whichever container is now active; nothing is duplicated.
+    /// </summary>
+    private void ApplyArrangementMode()
+    {
+        int level = UiModeComboBox.SelectedIndex;
+
+        if (level < 2)
+        {
+            // Disabled (not Auto) is the actual fix here, not just cosmetic: a
+            // horizontally-scrolling ScrollViewer measures its content with infinite
+            // available width, which stops the fixed grid's Star columns from ever
+            // shrinking to fit the window — they'd just sit at their natural size and
+            // force a scrollbar instead of responsively narrowing down to their
+            // MinWidth floor. Disabled gives the grid the real viewport width to work
+            // with, so it actually shrinks smoothly as the window gets smaller.
+            BodyScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+
+            FlowLayoutPanel.Visibility = Visibility.Collapsed;
+            CustomLayoutCanvas.Visibility = Visibility.Collapsed;
+            FixedLayoutGrid.Visibility = Visibility.Visible;
+
+            foreach (var thumb in _resizeThumbs.Values)
+                thumb.Visibility = Visibility.Collapsed;
+
+            MoveSectionsIntoFixedGrid();
+            return;
+        }
+
+        bool custom = _settings.Layout.UseCustomArrangement;
+
+        // The free-form canvas is deliberately much larger than the viewport (room to
+        // drag things around), so it needs real horizontal scrolling; the WrapPanel
+        // doesn't need it since it wraps within whatever width it's given either way.
+        BodyScrollViewer.HorizontalScrollBarVisibility = custom ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
+
+        FixedLayoutGrid.Visibility = Visibility.Collapsed;
+        FlowLayoutPanel.Visibility = custom ? Visibility.Collapsed : Visibility.Visible;
+        CustomLayoutCanvas.Visibility = custom ? Visibility.Visible : Visibility.Collapsed;
+
+        foreach (var thumb in _resizeThumbs.Values)
+            thumb.Visibility = custom ? Visibility.Visible : Visibility.Collapsed;
+
+        if (custom)
+            MoveSectionsIntoCanvas();
+        else
+            MoveSectionsIntoFlow();
+    }
+
+    /// <summary>
+    /// Normal/Advanced dashboard: Memory Status leads the left column since it's the one
+    /// thing worth checking at a glance, with Insights and Automation stacked beneath it;
+    /// Clean gets the whole right column since it's the primary action and benefits from
+    /// the extra width. Nothing here is draggable — headers only respond to mouse-down
+    /// when Custom arrangement is active, which it never is outside Experimental.
+    /// </summary>
+    private void MoveSectionsIntoFixedGrid()
+    {
+        PlaceInFixedColumn(MemoryStatusSection, FixedLeftColumn, 0);
+        PlaceInFixedColumn(InsightsSection, FixedLeftColumn, 1);
+        PlaceInFixedColumn(AutomationSection, FixedLeftColumn, 2);
+        PlaceInFixedColumn(CleanSection, FixedRightColumn, 0);
+    }
+
+    private static void PlaceInFixedColumn(FrameworkElement el, StackPanel column, int order)
+    {
+        if (!ReferenceEquals(el.Parent, column))
+        {
+            RemoveFromCurrentParent(el);
+            column.Children.Insert(Math.Min(order, column.Children.Count), el);
+        }
+        el.Margin = new Thickness(0, 0, 0, 16);
+        el.Width = double.NaN;  // fills the column — the Grid's MinWidth keeps it from breaking
+        el.Height = double.NaN; // sized to its own content
+    }
+
+    private void MoveSectionsIntoFlow()
+    {
+        foreach (var key in SectionOrder)
+        {
+            var el = _sections[key];
+            if (!ReferenceEquals(el.Parent, FlowLayoutPanel))
+            {
+                RemoveFromCurrentParent(el);
+                FlowLayoutPanel.Children.Add(el);
+            }
+            el.Margin = new Thickness(0, 0, 16, 16);
+            el.Width = DefaultFlowWidth[key];
+            el.Height = double.NaN; // auto-height — the WrapPanel card fits its content
+        }
+    }
+
+    private void MoveSectionsIntoCanvas()
+    {
+        for (int i = 0; i < SectionOrder.Length; i++)
+        {
+            string key = SectionOrder[i];
+            var el = _sections[key];
+
+            if (!ReferenceEquals(el.Parent, CustomLayoutCanvas))
+            {
+                RemoveFromCurrentParent(el);
+                el.Margin = new Thickness(0); // Canvas treats Margin as an extra offset — don't want that here
+                CustomLayoutCanvas.Children.Add(el);
+                System.Windows.Controls.Panel.SetZIndex(el, 1);
+            }
+
+            if (!_settings.Layout.Positions.TryGetValue(key, out var bounds))
+            {
+                // First time this section has ever been dragged onto the canvas — cascade
+                // sensible starting spots instead of stacking everything at (0,0).
+                bounds = new PanelBounds { X = (i % 3) * 340, Y = (i / 3) * 300, Width = 320, Height = 280 };
+                _settings.Layout.Positions[key] = bounds;
+            }
+
+            el.Width = bounds.Width;
+            el.Height = bounds.Height;
+            Canvas.SetLeft(el, bounds.X);
+            Canvas.SetTop(el, bounds.Y);
+        }
+    }
+
+    private static void RemoveFromCurrentParent(FrameworkElement element)
+    {
+        switch (element.Parent)
+        {
+            case System.Windows.Controls.Panel panel:
+                panel.Children.Remove(element);
+                break;
+            case Border border when ReferenceEquals(border.Child, element):
+                border.Child = null;
+                break;
+        }
+    }
+
+    private void SaveCurrentCustomPositions()
+    {
+        foreach (var key in SectionOrder)
+        {
+            var el = _sections[key];
+            if (!ReferenceEquals(el.Parent, CustomLayoutCanvas)) continue;
+
+            _settings.Layout.Positions[key] = new PanelBounds
+            {
+                X = Canvas.GetLeft(el),
+                Y = Canvas.GetTop(el),
+                Width = el.Width,
+                Height = el.Height
+            };
+        }
+        SettingsStore.Save(_settings);
+    }
+
+    // ----- Free-form drag-to-reposition, with live edge/alignment snapping -----
+
+    private void SectionHeader_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (!_settings.Layout.UseCustomArrangement || UiModeComboBox.SelectedIndex < 2) return;
+        if (sender is not FrameworkElement header || header.Tag is not string key) return;
+
+        _draggedSection = _sections[key];
+        _isDraggingSection = true;
+        _dragStartMouse = e.GetPosition(CustomLayoutCanvas);
+        _dragStartLeft = Canvas.GetLeft(_draggedSection);
+        _dragStartTop = Canvas.GetTop(_draggedSection);
+
+        System.Windows.Controls.Panel.SetZIndex(_draggedSection, 50); // float the one being dragged above the rest
+
+        header.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void SectionHeader_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (!_isDraggingSection || _draggedSection is null) return;
+        if (e.LeftButton != System.Windows.Input.MouseButtonState.Pressed) return;
+
+        var pos = e.GetPosition(CustomLayoutCanvas);
+        double rawLeft = Math.Max(0, _dragStartLeft + (pos.X - _dragStartMouse.X));
+        double rawTop = Math.Max(0, _dragStartTop + (pos.Y - _dragStartMouse.Y));
+
+        var (left, top, showVertical, verticalAt, showHorizontal, horizontalAt) = ApplySnap(_draggedSection, rawLeft, rawTop);
+
+        Canvas.SetLeft(_draggedSection, left);
+        Canvas.SetTop(_draggedSection, top);
+
+        SetSnapGuide(VerticalSnapGuide, showVertical, vertical: true, verticalAt);
+        SetSnapGuide(HorizontalSnapGuide, showHorizontal, vertical: false, horizontalAt);
+    }
+
+    private void SectionHeader_MouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (!_isDraggingSection) return;
+
+        _isDraggingSection = false;
+        if (_draggedSection != null) System.Windows.Controls.Panel.SetZIndex(_draggedSection, 1);
+        _draggedSection = null;
+
+        if (sender is UIElement el) el.ReleaseMouseCapture();
+
+        VerticalSnapGuide.Visibility = Visibility.Collapsed;
+        HorizontalSnapGuide.Visibility = Visibility.Collapsed;
+
+        SaveCurrentCustomPositions();
+    }
+
+    /// <summary>
+    /// Smart-guide snapping like Windows/PowerPoint/Figma: as a section's edge passes
+    /// close to the canvas edge or another section's edge, it snaps flush against it and
+    /// a thin guide line appears for the duration of the drag. Purely a visual/positional
+    /// aid — nothing is locked in place, the user can keep dragging past it freely.
+    /// </summary>
+    private (double left, double top, bool showV, double vAt, bool showH, double hAt) ApplySnap(
+        FrameworkElement dragged, double left, double top)
+    {
+        double width = dragged.Width;
+        double height = dragged.Height;
+
+        var xTargets = new List<double> { 0, Math.Max(CustomLayoutCanvas.ActualWidth, CustomLayoutCanvas.MinWidth) };
+        var yTargets = new List<double> { 0, Math.Max(CustomLayoutCanvas.ActualHeight, CustomLayoutCanvas.MinHeight) };
+
+        foreach (var key in SectionOrder)
+        {
+            var other = _sections[key];
+            if (ReferenceEquals(other, dragged) || other.Visibility != Visibility.Visible) continue;
+            if (!ReferenceEquals(other.Parent, CustomLayoutCanvas)) continue;
+
+            double ox = Canvas.GetLeft(other), oy = Canvas.GetTop(other);
+            double ow = other.Width, oh = other.Height;
+
+            xTargets.Add(ox);
+            xTargets.Add(ox + ow);
+            yTargets.Add(oy);
+            yTargets.Add(oy + oh);
+        }
+
+        bool showV = false, showH = false;
+        double vAt = 0, hAt = 0;
+        double snappedLeft = left, snappedTop = top;
+
+        foreach (double t in xTargets)
+        {
+            if (Math.Abs(left - t) < SnapThreshold) { snappedLeft = t; showV = true; vAt = t; break; }
+            if (Math.Abs(left + width - t) < SnapThreshold) { snappedLeft = t - width; showV = true; vAt = t; break; }
+        }
+
+        foreach (double t in yTargets)
+        {
+            if (Math.Abs(top - t) < SnapThreshold) { snappedTop = t; showH = true; hAt = t; break; }
+            if (Math.Abs(top + height - t) < SnapThreshold) { snappedTop = t - height; showH = true; hAt = t; break; }
+        }
+
+        return (snappedLeft, snappedTop, showV, vAt, showH, hAt);
+    }
+
+    private void SetSnapGuide(System.Windows.Shapes.Rectangle guide, bool show, bool vertical, double at)
+    {
+        if (!show)
+        {
+            guide.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        guide.Visibility = Visibility.Visible;
+        if (vertical)
+        {
+            Canvas.SetLeft(guide, at);
+            Canvas.SetTop(guide, 0);
+            guide.Height = Math.Max(CustomLayoutCanvas.ActualHeight, CustomLayoutCanvas.MinHeight);
+        }
+        else
+        {
+            Canvas.SetTop(guide, at);
+            Canvas.SetLeft(guide, 0);
+            guide.Width = Math.Max(CustomLayoutCanvas.ActualWidth, CustomLayoutCanvas.MinWidth);
+        }
+    }
+
+    // ----- Free-form resize from each section's corner grip -----
+
+    private void ResizeThumb_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
+    {
+        if (sender is not FrameworkElement thumb || thumb.Tag is not string key) return;
+        var section = _sections[key];
+
+        section.Width = Math.Max(240, section.Width + e.HorizontalChange);
+        section.Height = Math.Max(140, section.Height + e.VerticalChange);
+    }
+
+    private void ResizeThumb_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
+    {
+        SaveCurrentCustomPositions();
+    }
+
+    // ----- Focus Mode list resize handle (Experimental) -----
+
+    private void FocusListResizeThumb_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
+    {
+        double current = FocusListRow.Height.Value;
+        FocusListRow.Height = new GridLength(Math.Clamp(current + e.VerticalChange, 80, 500));
+    }
+
+    private void FocusListResizeThumb_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
+    {
+        _settings.FocusMode.ListHeight = FocusListRow.Height.Value;
+        SettingsStore.Save(_settings);
     }
 
     // ----- Insights (Status / History / Last Cleaned) -----
@@ -355,6 +922,19 @@ public partial class MainWindow : FluentWindow
 
     private void RefreshFocusListButton_Click(object sender, RoutedEventArgs e) => PopulateFocusList();
 
+    private void DeselectAllFocusButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_focusSelectedNames.Count == 0)
+        {
+            FocusModeStatusText.Text = "Nothing is protected yet.";
+            return;
+        }
+
+        _focusSelectedNames.Clear();
+        RenderFocusList();
+        FocusModeStatusText.Text = "Cleared — no apps are protected. Pick at least one before starting Focus Mode.";
+    }
+
     private void AddFocusFolderButton_Click(object sender, RoutedEventArgs e)
     {
         using var dialog = new System.Windows.Forms.FolderBrowserDialog
@@ -445,7 +1025,7 @@ public partial class MainWindow : FluentWindow
 
     // ----- Automation quick card -----
 
-    private void RefreshAutomationSummary()
+    internal void RefreshAutomationSummary()
     {
         AutomationQuickToggle.IsChecked = _settings.Automation.Enabled;
 
@@ -476,13 +1056,6 @@ public partial class MainWindow : FluentWindow
         SettingsStore.Save(_settings);
         RefreshAutomationSummary();
         (System.Windows.Application.Current as App)?.RestartAutomationIfNeeded();
-    }
-
-    private void ConfigureAutomationButton_Click(object sender, RoutedEventArgs e)
-    {
-        var settingsWindow = new SettingsWindow(_settings) { Owner = this };
-        WireSettingsCallbacks(settingsWindow);
-        settingsWindow.ShowDialog();
     }
 
     private void HistoryButton_Click(object sender, RoutedEventArgs e)
@@ -554,6 +1127,14 @@ public partial class MainWindow : FluentWindow
 
     private void BuildCustomItemsPanel()
     {
+        // Preserve whatever's currently checked — this rebuilds on every theme reload
+        // now too, and silently losing an in-progress custom selection because the user
+        // happened to flip Light/Dark would be a nasty surprise.
+        var previouslyChecked = _customCheckboxes
+            .Where(kv => kv.Value.IsChecked == true)
+            .Select(kv => kv.Key)
+            .ToHashSet();
+
         CustomItemsPanel.Children.Clear();
         _customCheckboxes.Clear();
         _customRowContainers.Clear();
@@ -563,7 +1144,12 @@ public partial class MainWindow : FluentWindow
             var container = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
             var headerRow = new DockPanel();
 
-            var checkBox = new System.Windows.Controls.CheckBox { Content = info.Title, FontWeight = FontWeights.SemiBold };
+            var checkBox = new System.Windows.Controls.CheckBox
+            {
+                Content = info.Title,
+                FontWeight = FontWeights.SemiBold,
+                IsChecked = previouslyChecked.Contains(info.Command)
+            };
             DockPanel.SetDock(checkBox, Dock.Left);
             headerRow.Children.Add(checkBox);
 
@@ -613,18 +1199,56 @@ public partial class MainWindow : FluentWindow
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        var settingsWindow = new SettingsWindow(_settings) { Owner = this };
+        // Deliberately no Owner here: a theme change now swaps this whole window out
+        // immediately while Settings stays open, and WPF force-closes any window an
+        // owner closes — instantly, with no Closing event to even intercept it (this is
+        // documented framework behavior, not something that can be worked around while
+        // keeping Owner set). ShowDialog() still disables this window underneath on its
+        // own, independent of Owner, so it stays just as modal as before.
+        var settingsWindow = new SettingsWindow(_settings);
         WireSettingsCallbacks(settingsWindow);
         settingsWindow.ShowDialog();
     }
 
-    private void WireSettingsCallbacks(SettingsWindow settingsWindow)
+    private void AutomationConfigButton_Click(object sender, RoutedEventArgs e) => OpenAutomationConfig();
+
+    private void ConfigureAutomationButton_Click(object sender, RoutedEventArgs e) => OpenAutomationConfig();
+
+    private void OpenAutomationConfig()
     {
-        settingsWindow.CompactModeChanged = () => ApplyCompactMode();
-        settingsWindow.AutomationChanged = () =>
+        var automationWindow = new AutomationConfigWindow(_settings) { Owner = this };
+        automationWindow.AutomationChanged = () =>
         {
             RefreshAutomationSummary();
             (System.Windows.Application.Current as App)?.RestartAutomationIfNeeded();
+        };
+        automationWindow.ShowDialog();
+        RefreshAutomationSummary();
+    }
+
+    /// <summary>
+    /// Every callback resolves App.CurrentMainWindow fresh at invocation time instead of
+    /// closing over `this` — Settings can now outlive this particular window instance
+    /// (a theme change replaces it while Settings keeps running), so a callback bound to
+    /// `this` would silently start acting on an orphaned, closed window the moment a
+    /// second change was made in the same Settings session. Resolving fresh each time
+    /// means it always lands on whichever window is actually on screen.
+    /// Internal (not private) so SettingsWindow can re-wire itself the same way after
+    /// replacing itself on a theme change — see SettingsWindow.PerformSelfReplacement.
+    /// </summary>
+    internal static void WireSettingsCallbacks(SettingsWindow settingsWindow)
+    {
+        settingsWindow.CompactModeChanged = () =>
+            (System.Windows.Application.Current as App)?.CurrentMainWindow.ApplyCompactMode();
+        settingsWindow.ThemeOrAccentChanged = () =>
+            (System.Windows.Application.Current as App)?.CurrentMainWindow.PerformFullWindowReload();
+        settingsWindow.IconBarPositionChanged = () =>
+            (System.Windows.Application.Current as App)?.CurrentMainWindow.ApplyIconBarPosition();
+        settingsWindow.AutomationChanged = () =>
+        {
+            var app = System.Windows.Application.Current as App;
+            app?.CurrentMainWindow.RefreshAutomationSummary();
+            app?.RestartAutomationIfNeeded();
         };
         settingsWindow.StartWithWindowsChanged = () =>
             (System.Windows.Application.Current as App)?.RefreshStartWithWindowsTask();

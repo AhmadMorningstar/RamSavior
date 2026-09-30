@@ -72,4 +72,12 @@ public static class JsonLogger
 
         return results;
     }
+
+    /// <summary>Deletes the history log file entirely, if it exists — used by History's
+    /// "Clear History" button. A missing file is already a fine, empty state, so this is
+    /// a no-op rather than an error in that case.</summary>
+    public static void Clear(string path)
+    {
+        if (File.Exists(path)) File.Delete(path);
+    }
 }

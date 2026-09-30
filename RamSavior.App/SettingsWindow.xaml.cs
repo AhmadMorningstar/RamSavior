@@ -2,7 +2,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using RamSavior.App.Settings;
-using RamSavior.Core.Automation;
 using Wpf.Ui.Controls;
 
 namespace RamSavior.App;
@@ -14,9 +13,29 @@ public partial class SettingsWindow : FluentWindow
     private readonly Dictionary<string, Border> _swatchBorders = new();
 
     public Action? CompactModeChanged { get; set; }
+
+    /// <summary>Fired (from PerformSelfReplacement, after the replacement Settings window
+    /// has rendered — not immediately) whenever theme or accent color changes. MainWindow
+    /// uses this to swap itself for a freshly-constructed window too, working around a
+    /// WPF-UI live-theme-switch bug rather than only partially refreshing.</summary>
+    public Action? ThemeOrAccentChanged { get; set; }
+
+    /// <summary>Fired whenever the icon bar position changes, so MainWindow can reparent
+    /// it into the new slot immediately.</summary>
+    public Action? IconBarPositionChanged { get; set; }
+
+    /// <summary>Automation itself is configured in the dedicated Automation Configuration
+    /// window now — this is kept only because Reset Everything still needs to notify
+    /// MainWindow that automation was turned off.</summary>
     public Action? AutomationChanged { get; set; }
     public Action? StartWithWindowsChanged { get; set; }
     public Action? GlobalHotkeyChanged { get; set; }
+
+    private static readonly IconBarPosition[] IconBarPositionOrder =
+    {
+        IconBarPosition.TopRight, IconBarPosition.TopCenter, IconBarPosition.TopLeft,
+        IconBarPosition.BottomRight, IconBarPosition.BottomCenter, IconBarPosition.BottomLeft
+    };
 
     public SettingsWindow(AppSettings settings)
     {
@@ -37,22 +56,8 @@ public partial class SettingsWindow : FluentWindow
         StartWithWindowsCheckBox.IsChecked = _settings.StartWithWindows;
         GlobalHotkeyCheckBox.IsChecked = _settings.GlobalHotkeyEnabled;
 
-        var auto = _settings.Automation;
-        AutomationEnabledCheckBox.IsChecked = auto.Enabled;
-        IntervalEnabledCheckBox.IsChecked = auto.IntervalEnabled;
-        IntervalMinutesBox.Text = auto.IntervalMinutes.ToString();
-        FreeMemThresholdCheckBox.IsChecked = auto.FreeMemoryThresholdEnabled;
-        FreeMemGbBox.Text = auto.FreeMemoryBelowGB.ToString("F1");
-        LoadPercentThresholdCheckBox.IsChecked = auto.LoadPercentThresholdEnabled;
-        LoadPercentBox.Text = auto.LoadAbovePercent.ToString();
-        StandbyThresholdCheckBox.IsChecked = auto.StandbyListThresholdEnabled;
-        StandbyMbBox.Text = auto.StandbyListAboveMB.ToString("F0");
-        TimeOfDayCheckBox.IsChecked = auto.TimeOfDayEnabled;
-        TimeOfDayBox.Text = auto.TimeOfDay.ToString(@"hh\:mm");
-        PerProcessAutoTrimCheckBox.IsChecked = auto.PerProcessAutoTrimEnabled;
-        PerProcessMbBox.Text = auto.PerProcessAutoTrimAboveMB.ToString("F0");
-        IdleMinutesBox.Text = auto.RequireIdleMinutes.ToString();
-        ExcludedProcessesBox.Text = string.Join(", ", auto.ExcludedProcessNames);
+        int iconBarIdx = Array.IndexOf(IconBarPositionOrder, _settings.Layout.IconBarPosition);
+        IconBarPositionCombo.SelectedIndex = iconBarIdx >= 0 ? iconBarIdx : 0;
 
         _isLoaded = true;
 
@@ -89,8 +94,8 @@ public partial class SettingsWindow : FluentWindow
         _settings.AccentColorHex = preset.Hex;
         SettingsStore.Save(_settings);
         ThemeApplier.Apply(_settings);
-        HighlightSelectedSwatch();
         StatusText.Text = $"Accent set to {preset.Name}.";
+        PerformSelfReplacement();
     }
 
     private void HighlightSelectedSwatch()
@@ -117,6 +122,48 @@ public partial class SettingsWindow : FluentWindow
         SettingsStore.Save(_settings);
         ThemeApplier.Apply(_settings);
         StatusText.Text = $"Theme set to {_settings.Theme}.";
+        PerformSelfReplacement();
+    }
+
+    /// <summary>
+    /// This window is just as subject to WPF-UI's live-theme-switch corruption as the
+    /// main window was (same underlying bug — lepoco/wpfui#927/#1193) since it's an
+    /// already-open window having its theme swapped in place. Rather than only fix the
+    /// main window and leave this one still glitching, apply the exact same remedy here:
+    /// replace this window with a freshly-constructed one at the same position/size.
+    ///
+    /// The main-window swap (ThemeOrAccentChanged) is deliberately NOT fired here
+    /// directly — it's deferred to newWindow's ContentRendered event, so this
+    /// replacement Settings window visibly appears and finishes rendering first, and the
+    /// main window only swaps a beat after. newWindow.Activate() afterward then brings
+    /// Settings back on top of whatever the main window's own swap just showed, so it
+    /// ends up front-most either way — Settings lost the Owner-enforced "can never be
+    /// covered by its owner" guarantee when Owner was removed to let the main window
+    /// swap while this stays open, so this restores that ordering by hand.
+    /// </summary>
+    private void PerformSelfReplacement()
+    {
+        double left = Left, top = Top, width = Width, height = Height;
+
+        var newWindow = new SettingsWindow(_settings)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Left = left,
+            Top = top,
+            Width = width,
+            Height = height
+        };
+        MainWindow.WireSettingsCallbacks(newWindow);
+
+        newWindow.ContentRendered += (_, _) =>
+        {
+            ThemeOrAccentChanged?.Invoke();
+            newWindow.Activate();
+        };
+
+        Close();
+
+        newWindow.ShowDialog();
     }
 
     private void CompactModeCheckBox_Changed(object sender, RoutedEventArgs e)
@@ -127,6 +174,20 @@ public partial class SettingsWindow : FluentWindow
         SettingsStore.Save(_settings);
         StatusText.Text = _settings.CompactMode ? "Compact Mode enabled." : "Compact Mode disabled.";
         CompactModeChanged?.Invoke();
+    }
+
+    private void IconBarPositionCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_isLoaded) return;
+
+        int idx = IconBarPositionCombo.SelectedIndex;
+        if (idx < 0 || idx >= IconBarPositionOrder.Length) return;
+
+        _settings.Layout.IconBarPosition = IconBarPositionOrder[idx];
+        SettingsStore.Save(_settings);
+
+        StatusText.Text = $"Icon bar moved to {(string)((ComboBoxItem)IconBarPositionCombo.SelectedItem).Content}.";
+        IconBarPositionChanged?.Invoke();
     }
 
     private void StartupSetting_Changed(object sender, RoutedEventArgs e)
@@ -167,73 +228,5 @@ public partial class SettingsWindow : FluentWindow
         SettingsStore.ResetToDefaultsAndDeleteHistory();
 
         StatusText.Text = "Reset complete. Restart RAM Savior to fully apply defaults.";
-    }
-
-    /// <summary>
-    /// Single handler for every automation field (checkboxes fire on Checked/Unchecked,
-    /// text boxes on LostFocus) — reads the whole automation panel back into settings
-    /// each time rather than wiring many separate handlers, since they all need to save +
-    /// notify together anyway.
-    /// </summary>
-    private void AutomationSetting_Changed(object sender, RoutedEventArgs e)
-    {
-        if (!_isLoaded) return;
-
-        var auto = _settings.Automation;
-
-        auto.Enabled = AutomationEnabledCheckBox.IsChecked == true;
-        auto.IntervalEnabled = IntervalEnabledCheckBox.IsChecked == true;
-        auto.IntervalMinutes = ParseIntOrDefault(IntervalMinutesBox.Text, auto.IntervalMinutes, min: 1, max: 1440);
-        IntervalMinutesBox.Text = auto.IntervalMinutes.ToString();
-
-        auto.FreeMemoryThresholdEnabled = FreeMemThresholdCheckBox.IsChecked == true;
-        auto.FreeMemoryBelowGB = ParseDoubleOrDefault(FreeMemGbBox.Text, auto.FreeMemoryBelowGB, min: 0.1, max: 256);
-        FreeMemGbBox.Text = auto.FreeMemoryBelowGB.ToString("F1");
-
-        auto.LoadPercentThresholdEnabled = LoadPercentThresholdCheckBox.IsChecked == true;
-        auto.LoadAbovePercent = ParseIntOrDefault(LoadPercentBox.Text, auto.LoadAbovePercent, min: 1, max: 99);
-        LoadPercentBox.Text = auto.LoadAbovePercent.ToString();
-
-        auto.StandbyListThresholdEnabled = StandbyThresholdCheckBox.IsChecked == true;
-        auto.StandbyListAboveMB = ParseDoubleOrDefault(StandbyMbBox.Text, auto.StandbyListAboveMB, min: 64, max: 262144);
-        StandbyMbBox.Text = auto.StandbyListAboveMB.ToString("F0");
-
-        auto.TimeOfDayEnabled = TimeOfDayCheckBox.IsChecked == true;
-        auto.TimeOfDay = ParseTimeOfDayOrDefault(TimeOfDayBox.Text, auto.TimeOfDay);
-        TimeOfDayBox.Text = auto.TimeOfDay.ToString(@"hh\:mm");
-
-        auto.PerProcessAutoTrimEnabled = PerProcessAutoTrimCheckBox.IsChecked == true;
-        auto.PerProcessAutoTrimAboveMB = ParseDoubleOrDefault(PerProcessMbBox.Text, auto.PerProcessAutoTrimAboveMB, min: 50, max: 65536);
-        PerProcessMbBox.Text = auto.PerProcessAutoTrimAboveMB.ToString("F0");
-
-        auto.RequireIdleMinutes = ParseIntOrDefault(IdleMinutesBox.Text, auto.RequireIdleMinutes, min: 0, max: 1440);
-        IdleMinutesBox.Text = auto.RequireIdleMinutes.ToString();
-
-        auto.ExcludedProcessNames = ExcludedProcessesBox.Text
-            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-            .ToList();
-
-        SettingsStore.Save(_settings);
-        StatusText.Text = auto.Enabled ? "Automation settings saved." : "Automation is off.";
-        AutomationChanged?.Invoke();
-    }
-
-    private static int ParseIntOrDefault(string text, int fallback, int min, int max)
-    {
-        if (!int.TryParse(text, out int value)) return fallback;
-        return Math.Clamp(value, min, max);
-    }
-
-    private static double ParseDoubleOrDefault(string text, double fallback, double min, double max)
-    {
-        if (!double.TryParse(text, out double value)) return fallback;
-        return Math.Clamp(value, min, max);
-    }
-
-    private static TimeSpan ParseTimeOfDayOrDefault(string text, TimeSpan fallback)
-    {
-        return TimeSpan.TryParse(text, out var value) && value >= TimeSpan.Zero && value < TimeSpan.FromDays(1)
-            ? value
-            : fallback;
     }
 }
