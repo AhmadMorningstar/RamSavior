@@ -11,6 +11,7 @@ public partial class WelcomeWindow : FluentWindow
     public WelcomeWindow()
     {
         InitializeComponent();
+        Icon = AppIcons.Window;
     }
 
     private void GotItButton_Click(object sender, RoutedEventArgs e)

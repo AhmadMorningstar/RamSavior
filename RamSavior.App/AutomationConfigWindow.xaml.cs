@@ -20,6 +20,7 @@ public partial class AutomationConfigWindow : FluentWindow
     public AutomationConfigWindow(AppSettings settings)
     {
         InitializeComponent();
+        Icon = AppIcons.Window;
         _settings = settings;
 
         BuildAutoCustomItemsPanel();

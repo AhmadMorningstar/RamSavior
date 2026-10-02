@@ -36,21 +36,15 @@ public sealed class TrayIconManager : IDisposable
     {
         try
         {
-            // Pack URI pointing to the embedded WPF resource inside the assembly
-            var uri = new Uri("pack://application:,,,/Assets/Icons/app.ico", UriKind.Absolute);
-            var streamInfo = System.Windows.Application.GetResourceStream(uri);
-
-            if (streamInfo?.Stream != null)
-            {
-                return new Icon(streamInfo.Stream);
-            }
+            // The icon lives in RamSavior.Core now (single source of truth for assets).
+            using var stream = RamSavior.Core.AppAssets.OpenAsset("Icons/app.ico");
+            return new Icon(stream);
         }
         catch
         {
-            // Fall back to system icon if resource resolution fails
+            // Fall back to system icon if the asset can't be read
+            return SystemIcons.Application;
         }
-
-        return SystemIcons.Application;
     }
 
     public void ShowBalloon(string title, string text)

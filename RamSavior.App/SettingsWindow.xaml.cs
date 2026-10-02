@@ -40,6 +40,7 @@ public partial class SettingsWindow : FluentWindow
     public SettingsWindow(AppSettings settings)
     {
         InitializeComponent();
+        Icon = AppIcons.Window;
         _settings = settings;
 
         BuildSwatches();
@@ -112,17 +113,24 @@ public partial class SettingsWindow : FluentWindow
     {
         if (!_isLoaded) return;
 
-        _settings.Theme = sender switch
+        ThemeChoice choice = sender switch
         {
             _ when ReferenceEquals(sender, LightThemeRadio) => ThemeChoice.Light,
             _ when ReferenceEquals(sender, DarkThemeRadio) => ThemeChoice.Dark,
             _ => ThemeChoice.System
         };
 
-        SettingsStore.Save(_settings);
-        ThemeApplier.Apply(_settings);
-        StatusText.Text = $"Theme set to {_settings.Theme}.";
-        PerformSelfReplacement();
+        // Nothing on screen changes here. The choice is saved and the user is asked to
+        // restart; only "Restart now" applies it (and rebuilds this window + the main one).
+        if (ThemeChangeFlow.RequestChange(this, _settings, choice))
+        {
+            PerformSelfReplacement();
+            return;
+        }
+
+        StatusText.Text = ThemeApplier.IsPendingRestart(_settings)
+            ? $"{choice} theme saved \u2014 it will apply after a restart."
+            : $"Theme set to {choice}.";
     }
 
     /// <summary>

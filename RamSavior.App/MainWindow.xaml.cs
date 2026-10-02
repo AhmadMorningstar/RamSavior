@@ -63,6 +63,7 @@ public partial class MainWindow : FluentWindow
     public MainWindow(AppSettings settings)
     {
         InitializeComponent();
+        Icon = AppIcons.Window;
         _settings = settings;
         _focusModeController = new FocusModeController(_settings);
         _focusModeController.TickCompleted += result => Dispatcher.Invoke(() => OnFocusModeTick(result));
@@ -322,28 +323,33 @@ public partial class MainWindow : FluentWindow
     {
         // Deliberately resolves to a concrete Light/Dark choice rather than toggling
         // "System" — once someone reaches for a manual quick-switch they want a definite
-        // answer, and the icon needs to reliably reflect the app's actual appearance.
-        _settings.Theme = IsEffectivelyLight() ? ThemeChoice.Dark : ThemeChoice.Light;
-        SettingsStore.Save(_settings);
-        ThemeApplier.Apply(_settings);
-        PerformFullWindowReload();
+        // answer. Flips from the *saved* choice (not what's on screen) so clicking again
+        // while a change is still pending cleanly takes it back.
+        ThemeChoice next = ThemeApplier.Resolve(_settings.Theme) == Wpf.Ui.Appearance.ApplicationTheme.Light
+            ? ThemeChoice.Dark
+            : ThemeChoice.Light;
+
+        // Saves the choice, shows "You must restart to apply changes", and only applies
+        // it if the user picks "Restart now" — which is the same window rebuild as before.
+        if (ThemeChangeFlow.RequestChange(this, _settings, next))
+            PerformFullWindowReload();
+        else
+            UpdateThemeToggleIcon();
     }
 
-    private bool IsEffectivelyLight() => _settings.Theme switch
-    {
-        ThemeChoice.Light => true,
-        ThemeChoice.Dark => false,
-        _ => ThemeApplier.IsWindowsUsingLightTheme()
-    };
+    /// <summary>What the app is actually showing right now — never the pending choice.</summary>
+    private static bool IsEffectivelyLight() => ThemeApplier.IsActiveThemeLight;
 
     private void UpdateThemeToggleIcon()
     {
+        // Icon mirrors the live look; the tooltip describes what the next click does.
         bool light = IsEffectivelyLight();
+        bool nextIsDark = ThemeApplier.Resolve(_settings.Theme) == Wpf.Ui.Appearance.ApplicationTheme.Light;
         ThemeToggleButton.Icon = new Wpf.Ui.Controls.SymbolIcon
         {
             Symbol = light ? Wpf.Ui.Controls.SymbolRegular.WeatherSunny24 : Wpf.Ui.Controls.SymbolRegular.WeatherMoon24
         };
-        ThemeToggleButton.ToolTip = light ? "Switch to dark appearance" : "Switch to light appearance";
+        ThemeToggleButton.ToolTip = nextIsDark ? "Switch to dark appearance" : "Switch to light appearance";
     }
 
     // ----- Layout picker (Experimental only): visibility + arrangement (auto vs custom) -----

@@ -3,7 +3,6 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="RAM Savior"
-        Icon="Assets/Icons/app.ico"
         Width="1500"
         MinHeight="495" MinWidth="875"
         WindowBackdropType="Mica"

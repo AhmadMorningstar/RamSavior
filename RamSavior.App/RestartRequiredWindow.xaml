@@ -1,0 +1,38 @@
+<ui:FluentWindow x:Class="RamSavior.App.RestartRequiredWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="Restart required"
+        Width="420"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        WindowBackdropType="Mica"
+        ExtendsContentIntoTitleBar="True"
+        WindowStartupLocation="CenterOwner">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Title="Restart required" Grid.Row="0" ShowMaximize="False" ShowMinimize="False"/>
+
+        <StackPanel Grid.Row="1" Margin="24,12,24,24">
+            <TextBlock Text="You must restart to apply changes"
+                       FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
+            <TextBlock Margin="0,8,0,20" Opacity="0.7" TextWrapping="Wrap"
+                       Text="Your new appearance is saved, but nothing changes until you restart. Restarting only reloads the windows — RAM Savior keeps running in the background."/>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <ui:Button x:Name="LaterButton" Content="Later" Margin="0,0,8,0"
+                           ToolTip="Keep the current look for now. The new theme applies the next time RAM Savior starts."
+                           Click="LaterButton_Click"/>
+                <ui:Button x:Name="RestartButton" Content="Restart now" Appearance="Primary"
+                           ToolTip="Reload the windows with the new theme"
+                           Click="RestartButton_Click"/>
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</ui:FluentWindow>

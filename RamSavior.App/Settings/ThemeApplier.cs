@@ -7,14 +7,42 @@ namespace RamSavior.App.Settings;
 
 public static class ThemeApplier
 {
+    // The theme the running app is actually showing. settings.Theme is only what the
+    // user has *chosen*; the two are allowed to differ until the user restarts the UI
+    // (see ThemeChangeFlow). Nothing in the app may read settings.Theme to decide how
+    // to render, or a pending choice would leak in through an unrelated refresh
+    // (an accent change, a window rebuild, ...).
+    private static ApplicationTheme _activeTheme = ApplicationTheme.Dark;
+
+    /// <summary>The theme currently on screen — not the pending choice.</summary>
+    public static ApplicationTheme ActiveTheme => _activeTheme;
+
+    public static bool IsActiveThemeLight => _activeTheme == ApplicationTheme.Light;
+
+    /// <summary>Call once at startup, before the first <see cref="Apply"/>: whatever is
+    /// saved becomes the theme for this run.</summary>
+    public static void InitializeActive(AppSettings settings) => _activeTheme = Resolve(settings.Theme);
+
+    /// <summary>True when the saved choice would look different from what's on screen.</summary>
+    public static bool IsPendingRestart(AppSettings settings) => Resolve(settings.Theme) != _activeTheme;
+
+    /// <summary>Makes the saved choice the live one. Only call right before rebuilding
+    /// the windows (or when the choice resolves to the same look anyway).</summary>
+    public static void CommitPending(AppSettings settings) => _activeTheme = Resolve(settings.Theme);
+
+    /// <summary>Resolves a choice (incl. "follow system") to a concrete Light/Dark.</summary>
+    internal static ApplicationTheme Resolve(ThemeChoice choice) => choice switch
+    {
+        ThemeChoice.Light => ApplicationTheme.Light,
+        ThemeChoice.Dark => ApplicationTheme.Dark,
+        _ => IsWindowsUsingLightTheme() ? ApplicationTheme.Light : ApplicationTheme.Dark
+    };
+
+    /// <summary>Applies the ACTIVE theme plus the current accent color. A pending theme
+    /// choice is deliberately ignored here — it only takes effect via CommitPending.</summary>
     public static void Apply(AppSettings settings)
     {
-        ApplicationTheme theme = settings.Theme switch
-        {
-            ThemeChoice.Light => ApplicationTheme.Light,
-            ThemeChoice.Dark => ApplicationTheme.Dark,
-            _ => IsWindowsUsingLightTheme() ? ApplicationTheme.Light : ApplicationTheme.Dark
-        };
+        ApplicationTheme theme = _activeTheme;
 
         // updateAccent:false — we set the accent ourselves right after, and letting this
         // call also touch accent resources just adds another order-of-operations question
