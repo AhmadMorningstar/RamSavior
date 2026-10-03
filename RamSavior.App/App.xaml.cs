@@ -60,6 +60,7 @@ public partial class App : System.Windows.Application
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
         _settings = SettingsStore.Load();
+        ThemeApplier.InitializeActive(_settings);
         ThemeApplier.Apply(_settings);
 
         _mainWindow = new MainWindow(_settings);

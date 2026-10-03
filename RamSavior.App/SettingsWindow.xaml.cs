@@ -10,7 +10,7 @@ public partial class SettingsWindow : FluentWindow
 {
     private readonly AppSettings _settings;
     private bool _isLoaded;
-    private readonly Dictionary<string, Border> _swatchBorders = new();
+    private readonly Dictionary<string, Border> _swatchBorders = new(StringComparer.OrdinalIgnoreCase);
 
     public Action? CompactModeChanged { get; set; }
 
@@ -40,6 +40,7 @@ public partial class SettingsWindow : FluentWindow
     public SettingsWindow(AppSettings settings)
     {
         InitializeComponent();
+        Icon = AppIcons.Window;
         _settings = settings;
 
         BuildSwatches();
@@ -62,6 +63,7 @@ public partial class SettingsWindow : FluentWindow
         _isLoaded = true;
 
         HighlightSelectedSwatch();
+        ConfigureCustomAccentSection();
     }
 
     private void BuildSwatches()
@@ -89,13 +91,65 @@ public partial class SettingsWindow : FluentWindow
         }
     }
 
-    private void OnSwatchClicked(AccentPreset preset)
+    private void OnSwatchClicked(AccentPreset preset) => ApplyAccent(preset.Hex, $"{preset.Name} accent");
+
+    /// <summary>Single path for every accent change (preset, custom, reset). Nothing on
+    /// screen changes until the user confirms the restart prompt.</summary>
+    private void ApplyAccent(string hex, string description)
     {
-        _settings.AccentColorHex = preset.Hex;
-        SettingsStore.Save(_settings);
-        ThemeApplier.Apply(_settings);
-        StatusText.Text = $"Accent set to {preset.Name}.";
-        PerformSelfReplacement();
+        if (ThemeChangeFlow.RequestAccentChange(this, _settings, hex))
+        {
+            PerformSelfReplacement();
+            return;
+        }
+
+        // Not restarted (yet): reflect the saved choice in this window without touching the theme.
+        HighlightSelectedSwatch();
+        ConfigureCustomAccentSection();
+        StatusText.Text = ThemeApplier.IsPendingRestart(_settings)
+            ? $"{description} saved \u2014 it will apply after a restart."
+            : $"{description} set.";
+    }
+
+    /// <summary>Custom accent is Experimental-only. Never hidden - greyed out otherwise, so
+    /// everyone can see it exists. (Settings is modal, so the mode can't change while open.)</summary>
+    private void ConfigureCustomAccentSection()
+    {
+        bool unlocked = _settings.EnableExperimentalFeatures;
+
+        CustomAccentControls.IsEnabled = unlocked;
+        CustomAccentControls.Opacity = unlocked ? 1.0 : 0.4;
+        CustomAccentLockNote.Visibility = unlocked ? Visibility.Collapsed : Visibility.Visible;
+        CustomAccentCard.ToolTip = unlocked ? null : "Available in Experimental mode";
+
+        string hex = _settings.AccentColorHex;
+        CurrentAccentSwatch.Background = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex)!);
+        CurrentAccentText.Text = $"Current: {AccentPresets.NameFor(hex) ?? "Custom"} ({hex.ToUpperInvariant()})"
+            + (ThemeApplier.IsPendingRestart(_settings) ? " \u2014 applies after restart" : "");
+
+        // Nothing to reset when it's already the default.
+        if (unlocked)
+            ResetAccentButton.IsEnabled = !string.Equals(hex, AccentPresets.DefaultHex, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void CustomAccentButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_settings.EnableExperimentalFeatures) return;
+
+        var picker = new CustomAccentWindow(_settings.AccentColorHex) { Owner = this };
+        picker.ShowDialog();
+
+        if (picker.ChosenHex is { } hex &&
+            !string.Equals(hex, _settings.AccentColorHex, StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyAccent(hex, $"Custom accent {hex}");
+        }
+    }
+
+    private void ResetAccentButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_settings.EnableExperimentalFeatures) return;
+        ApplyAccent(AccentPresets.DefaultHex, "Default Amber accent");
     }
 
     private void HighlightSelectedSwatch()
@@ -112,17 +166,24 @@ public partial class SettingsWindow : FluentWindow
     {
         if (!_isLoaded) return;
 
-        _settings.Theme = sender switch
+        ThemeChoice choice = sender switch
         {
             _ when ReferenceEquals(sender, LightThemeRadio) => ThemeChoice.Light,
             _ when ReferenceEquals(sender, DarkThemeRadio) => ThemeChoice.Dark,
             _ => ThemeChoice.System
         };
 
-        SettingsStore.Save(_settings);
-        ThemeApplier.Apply(_settings);
-        StatusText.Text = $"Theme set to {_settings.Theme}.";
-        PerformSelfReplacement();
+        // Nothing on screen changes here. The choice is saved and the user is asked to
+        // restart; only "Restart now" applies it (and rebuilds this window + the main one).
+        if (ThemeChangeFlow.RequestChange(this, _settings, choice))
+        {
+            PerformSelfReplacement();
+            return;
+        }
+
+        StatusText.Text = ThemeApplier.IsPendingRestart(_settings)
+            ? $"{choice} theme saved \u2014 it will apply after a restart."
+            : $"Theme set to {choice}.";
     }
 
     /// <summary>

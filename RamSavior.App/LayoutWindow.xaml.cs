@@ -17,6 +17,7 @@ public partial class LayoutWindow : FluentWindow
     public LayoutWindow(AppSettings settings)
     {
         InitializeComponent();
+        Icon = AppIcons.Window;
         _settings = settings;
 
         _isLoaded = false;

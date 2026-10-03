@@ -12,6 +12,7 @@ public partial class HistoryWindow : FluentWindow
     public HistoryWindow(string logPath)
     {
         InitializeComponent();
+        Icon = AppIcons.Window;
         _logPath = logPath;
         Load();
     }

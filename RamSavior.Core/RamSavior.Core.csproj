@@ -10,4 +10,10 @@
     <RootNamespace>RamSavior.Core</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Core owns every shared asset. Embedded (not WPF "Resource") so Core stays a plain
+         class library: the CLI can reference it without dragging WPF into its publish. -->
+    <EmbeddedResource Include="Assets\**\*" />
+  </ItemGroup>
+
 </Project>
