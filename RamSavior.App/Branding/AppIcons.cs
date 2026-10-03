@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using RamSavior.Core;
@@ -14,7 +15,7 @@ internal static class AppIcons
     {
         try
         {
-            using System.IO.Stream stream = AppAssets.OpenAsset("Icons/app.ico");
+            using Stream stream = AppAssets.OpenAsset("Icons/app.ico");
             // OnLoad copies the bits so the stream can be disposed right away.
             BitmapFrame frame = BitmapFrame.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
             frame.Freeze();

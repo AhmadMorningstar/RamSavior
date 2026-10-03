@@ -7,12 +7,13 @@ namespace RamSavior.App.Settings;
 
 public static class ThemeApplier
 {
-    // The theme the running app is actually showing. settings.Theme is only what the
-    // user has *chosen*; the two are allowed to differ until the user restarts the UI
-    // (see ThemeChangeFlow). Nothing in the app may read settings.Theme to decide how
-    // to render, or a pending choice would leak in through an unrelated refresh
-    // (an accent change, a window rebuild, ...).
+    // The theme and accent the running app is actually showing. settings.Theme and
+    // settings.AccentColorHex are only what the user has *chosen*; the two are allowed
+    // to differ until the user restarts the UI (see ThemeChangeFlow). Nothing in the app
+    // may read the saved choice to decide how to render, or a pending choice would leak
+    // in through an unrelated refresh (a window rebuild, ...).
     private static ApplicationTheme _activeTheme = ApplicationTheme.Dark;
+    private static string _activeAccentHex = AccentPresets.DefaultHex;
 
     /// <summary>The theme currently on screen — not the pending choice.</summary>
     public static ApplicationTheme ActiveTheme => _activeTheme;
@@ -20,15 +21,25 @@ public static class ThemeApplier
     public static bool IsActiveThemeLight => _activeTheme == ApplicationTheme.Light;
 
     /// <summary>Call once at startup, before the first <see cref="Apply"/>: whatever is
-    /// saved becomes the theme for this run.</summary>
-    public static void InitializeActive(AppSettings settings) => _activeTheme = Resolve(settings.Theme);
+    /// saved becomes the theme and accent for this run.</summary>
+    public static void InitializeActive(AppSettings settings)
+    {
+        _activeTheme = Resolve(settings.Theme);
+        _activeAccentHex = settings.AccentColorHex;
+    }
 
-    /// <summary>True when the saved choice would look different from what's on screen.</summary>
-    public static bool IsPendingRestart(AppSettings settings) => Resolve(settings.Theme) != _activeTheme;
+    /// <summary>True when the saved theme or accent would look different from what's on screen.</summary>
+    public static bool IsPendingRestart(AppSettings settings) =>
+        Resolve(settings.Theme) != _activeTheme ||
+        !string.Equals(settings.AccentColorHex, _activeAccentHex, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Makes the saved choice the live one. Only call right before rebuilding
-    /// the windows (or when the choice resolves to the same look anyway).</summary>
-    public static void CommitPending(AppSettings settings) => _activeTheme = Resolve(settings.Theme);
+    /// <summary>Makes the saved choices the live ones. Only call right before rebuilding
+    /// the windows (or when the choices resolve to the same look anyway).</summary>
+    public static void CommitPending(AppSettings settings)
+    {
+        _activeTheme = Resolve(settings.Theme);
+        _activeAccentHex = settings.AccentColorHex;
+    }
 
     /// <summary>Resolves a choice (incl. "follow system") to a concrete Light/Dark.</summary>
     internal static ApplicationTheme Resolve(ThemeChoice choice) => choice switch
@@ -38,8 +49,8 @@ public static class ThemeApplier
         _ => IsWindowsUsingLightTheme() ? ApplicationTheme.Light : ApplicationTheme.Dark
     };
 
-    /// <summary>Applies the ACTIVE theme plus the current accent color. A pending theme
-    /// choice is deliberately ignored here — it only takes effect via CommitPending.</summary>
+    /// <summary>Applies the ACTIVE theme and ACTIVE accent. Pending choices are
+    /// deliberately ignored here — they only take effect via CommitPending.</summary>
     public static void Apply(AppSettings settings)
     {
         ApplicationTheme theme = _activeTheme;
@@ -49,7 +60,7 @@ public static class ThemeApplier
         // on top of the known library bug below.
         ApplicationThemeManager.Apply(theme, Wpf.Ui.Controls.WindowBackdropType.Mica, updateAccent: false);
 
-        var color = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(settings.AccentColorHex)!;
+        var color = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(_activeAccentHex)!;
         ApplicationAccentColorManager.Apply(color, theme, false);
 
         // --- Workaround for a known open WPF-UI bug (lepoco/wpfui#1481): the built-in
